@@ -8,7 +8,7 @@ __pycache__/
 *.pyw
 *.pyz
 
-ARC-AGI-3-Agents/*
+ARC-AGI-3-Agents/recordings/*
 !ARC-AGI-3-Agents/agents/
 !ARC-AGI-3-Agents/agents/blindsquirrel_recon.py
 !ARC-AGI-3-Agents/test_blindsquirrel.py

@@ -13,6 +13,8 @@ from .templates.random_agent import Random
 from .templates.reasoning_agent import ReasoningAgent
 from .templates.smolagents import SmolCodingAgent, SmolVisionAgent
 from .blindsquirrel_recon import BlindSquirrelReCoN
+from .recon_arc_1 import ReCoNArc1
+from .recon_arc_2 import ReCoNArc2
 
 load_dotenv()
 
@@ -28,6 +30,8 @@ for rec in Recorder.list():
 
 # update the agent dictionary to include subclasses of LLM class
 AVAILABLE_AGENTS["reasoningagent"] = ReasoningAgent
+AVAILABLE_AGENTS["recon_arc_1"] = ReCoNArc1
+AVAILABLE_AGENTS["recon_arc_2"] = ReCoNArc2
 
 __all__ = [
     "Swarm",
@@ -44,6 +48,8 @@ __all__ = [
     "SmolCodingAgent",
     "SmolVisionAgent",
     "BlindSquirrelReCoN",
+    "ReCoNArc1",
+    "ReCoNArc2",
     "Agent",
     "Recorder",
     "Playback",

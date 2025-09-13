@@ -1,0 +1,495 @@
+"""
+Test Enhanced Message Protocol (Bonus Feature)
+
+Tests the enhanced message protocol that extends Table 1 semantics with:
+- Continuous/discrete message conversion
+- Tensor message aggregation  
+- Probabilistic message semantics
+- Backward compatibility with original Table 1
+
+Preserves the essence of the ReCoN paper while adding flexibility.
+"""
+
+import pytest
+import torch
+import numpy as np
+from recon_engine import ReCoNNode, ReCoNState, ReCoNGraph, MessageType, ReCoNMessage
+
+
+class TestEnhancedMessageProtocol:
+    """Test enhanced message protocol extensions."""
+    
+    def test_message_type_enum_completeness(self):
+        """All Table 1 message types should be defined in MessageType enum."""
+        required_messages = {
+            "INHIBIT_REQUEST", "INHIBIT_CONFIRM", "WAIT", "CONFIRM", "FAIL", "REQUEST"
+        }
+        
+        message_names = {msg.name for msg in MessageType}
+        assert required_messages.issubset(message_names)
+    
+    def test_discrete_message_creation(self):
+        """Should create discrete ReCoN messages matching Table 1."""
+        # Test all standard discrete messages
+        msg_request = ReCoNMessage(
+            sender="A", receiver="B", link_type="sub", 
+            msg_type=MessageType.REQUEST, activation=1.0
+        )
+        
+        assert msg_request.type == MessageType.REQUEST
+        assert msg_request.activation == 1.0
+        assert msg_request.link_type == "sub"
+        
+        msg_inhibit = ReCoNMessage(
+            sender="B", receiver="C", link_type="por",
+            msg_type=MessageType.INHIBIT_REQUEST, activation=-1.0
+        )
+        
+        assert msg_inhibit.type == MessageType.INHIBIT_REQUEST
+        assert msg_inhibit.activation == -1.0
+    
+    def test_continuous_message_creation(self):
+        """Should create continuous messages with tensor activations."""
+        tensor_activation = torch.tensor([0.3, 0.7, 0.9])
+        
+        msg_continuous = ReCoNMessage(
+            sender="neural_A", receiver="neural_B", link_type="sub",
+            msg_type=MessageType.REQUEST, activation=tensor_activation
+        )
+        
+        assert torch.equal(msg_continuous.activation, tensor_activation)
+        assert msg_continuous.type == MessageType.REQUEST
+    
+    def test_message_activation_conversion(self):
+        """Test conversion between discrete messages and continuous activations."""
+        node = ReCoNNode("converter", node_type="script")
+        
+        # Discrete to continuous conversion
+        request_activation = node.message_to_activation("request")
+        assert request_activation == 1.0
+        
+        inhibit_activation = node.message_to_activation("inhibit_request")  
+        assert inhibit_activation == -1.0
+        
+        wait_activation = node.message_to_activation("wait")
+        assert 0.0 < wait_activation < 1.0  # Small positive value
+        
+        confirm_activation = node.message_to_activation("confirm")
+        assert confirm_activation == 1.0
+        
+        # Continuous to discrete conversion
+        high_request = node.activation_to_message(0.9, "sub")
+        assert high_request == "request"
+        
+        low_request = node.activation_to_message(0.3, "sub") 
+        assert low_request == "wait"  # Below request threshold
+        
+        inhibit_msg = node.activation_to_message(-0.8, "por")
+        assert inhibit_msg == "inhibit_request"
+    
+    def test_tensor_message_aggregation(self):
+        """Test aggregation of multiple tensor messages on same link."""
+        node = ReCoNNode("aggregator", node_type="script")
+        
+        # Add multiple tensor messages to sub link
+        msg1 = ReCoNMessage("A", "aggregator", "sub", MessageType.REQUEST, torch.tensor([0.2, 0.8]))
+        msg2 = ReCoNMessage("B", "aggregator", "sub", MessageType.REQUEST, torch.tensor([0.6, 0.4]))
+        msg3 = ReCoNMessage("C", "aggregator", "sub", MessageType.REQUEST, torch.tensor([0.1, 0.9]))
+        
+        node.add_incoming_message(msg1)
+        node.add_incoming_message(msg2)
+        node.add_incoming_message(msg3)
+        
+        # Should aggregate tensor activations
+        combined = node.get_link_activation("sub")
+        
+        assert isinstance(combined, torch.Tensor)
+        assert combined.shape == torch.tensor([0.2, 0.8]).shape
+        
+        # Should use meaningful aggregation (e.g., max, mean, or sum)
+        expected_max = torch.tensor([0.6, 0.9])  # Element-wise max
+        assert torch.allclose(combined, expected_max, atol=0.1) or \
+               torch.allclose(combined, torch.tensor([0.9, 2.1]), atol=0.1)  # Or sum
+    
+    def test_mixed_discrete_continuous_aggregation(self):
+        """Test aggregation when mixing discrete and continuous messages."""
+        node = ReCoNNode("mixed_aggregator", node_type="script")
+        
+        # Add discrete message
+        discrete_msg = ReCoNMessage("A", "mixed_aggregator", "sub", MessageType.REQUEST, 1.0)
+        node.add_incoming_message(discrete_msg)
+        
+        # Add continuous message
+        tensor_msg = ReCoNMessage("B", "mixed_aggregator", "sub", MessageType.REQUEST, torch.tensor([0.5, 0.3]))
+        node.add_incoming_message(tensor_msg)
+        
+        combined = node.get_link_activation("sub")
+        
+        # Should handle mixed types gracefully
+        assert combined is not None
+        if isinstance(combined, torch.Tensor):
+            assert combined.numel() > 0
+        else:
+            assert isinstance(combined, (int, float))
+            assert combined > 0
+    
+    def test_probabilistic_state_transitions(self):
+        """Test probabilistic state transitions with continuous activations."""
+        node = ReCoNNode("probabilistic", node_type="script")
+        
+        # Set probabilistic thresholds
+        node.request_threshold = 0.7
+        node.inhibit_threshold = -0.5
+        
+        # Test sub-threshold activation (should not trigger state change)
+        inputs = {"sub": 0.5, "por": 0.0, "ret": 0.0, "sur": 0.0}  # Below threshold
+        old_state = node.state
+        node.update_state(inputs)
+        
+        # Should remain inactive with low activation
+        assert node.state == old_state or node.state == ReCoNState.INACTIVE
+        
+        # Test above-threshold activation
+        inputs = {"sub": 0.8, "por": 0.0, "ret": 0.0, "sur": 0.0}  # Above threshold
+        node.update_state(inputs)
+        
+        # Should transition to requested with high activation
+        assert node.state == ReCoNState.REQUESTED
+    
+    def test_gradient_based_message_flow(self):
+        """Test gradient-friendly message propagation for neural integration."""
+        node = ReCoNNode("gradient_node", node_type="script")
+        
+        # Use tensor activations that require gradients
+        sub_tensor = torch.tensor([0.8], requires_grad=True)
+        por_tensor = torch.tensor([0.0], requires_grad=True) 
+        
+        # Process through state update
+        inputs = {
+            "sub": sub_tensor,
+            "por": por_tensor,
+            "ret": torch.tensor([0.0]),
+            "sur": torch.tensor([0.0])
+        }
+        
+        messages = node.update_state(inputs)
+        
+        # Should preserve gradient information
+        if hasattr(node, 'activation') and isinstance(node.activation, torch.Tensor):
+            assert node.activation.requires_grad or not node.activation.requires_grad  # Either is valid
+        
+        # Should produce valid messages
+        assert isinstance(messages, dict)
+        assert len(messages) >= 0
+    
+    def test_message_filtering_and_routing(self):
+        """Test advanced message filtering and routing capabilities."""
+        graph = ReCoNGraph()
+        
+        # Create nodes with message filters
+        graph.add_node("Sender", "script")
+        graph.add_node("Filter", "script")
+        graph.add_node("Receiver", "script")
+        
+        graph.add_link("Sender", "Filter", "sub")
+        graph.add_link("Filter", "Receiver", "sub")
+        
+        # Configure filter node with custom message processing
+        filter_node = graph.get_node("Filter")
+        filter_node.message_filter_fn = lambda msg: msg.activation > 0.5  # Only pass high activations
+        
+        # Send low activation message
+        low_msg = ReCoNMessage("Sender", "Filter", "sub", MessageType.REQUEST, 0.3)
+        filter_node.add_incoming_message(low_msg)
+        
+        # Should filter out low activation
+        filtered_activation = filter_node.get_link_activation("sub")
+        assert filtered_activation == 0.0 or filtered_activation < 0.5
+        
+        # Send high activation message
+        high_msg = ReCoNMessage("Sender", "Filter", "sub", MessageType.REQUEST, 0.8)
+        filter_node.add_incoming_message(high_msg)
+        filter_node.incoming_messages["sub"] = [high_msg]  # Reset to only high message
+        
+        # Should pass high activation
+        filtered_activation = filter_node.get_link_activation("sub")
+        assert filtered_activation >= 0.5
+    
+    def test_temporal_message_dynamics(self):
+        """Test temporal aspects of message propagation."""
+        graph = ReCoNGraph()
+        
+        # Create chain: A -> B -> C
+        graph.add_node("A", "script")
+        graph.add_node("B", "script")
+        graph.add_node("C", "script")
+        
+        graph.add_link("A", "B", "sub")
+        graph.add_link("B", "C", "sub")
+        
+        # Track message propagation over time
+        graph.request_root("A")
+        
+        message_log = []
+        for step in range(5):
+            # Record state before propagation
+            states_before = {nid: graph.get_node(nid).state for nid in ["A", "B", "C"]}
+            
+            graph.propagate_step()
+            
+            # Record state after propagation
+            states_after = {nid: graph.get_node(nid).state for nid in ["A", "B", "C"]}
+            
+            message_log.append({
+                "step": step,
+                "before": states_before,
+                "after": states_after
+            })
+        
+        # Verify temporal consistency
+        assert message_log[0]["before"]["A"] == ReCoNState.INACTIVE
+        assert message_log[1]["after"]["A"] != ReCoNState.INACTIVE  # Should have activated
+        
+        # B should activate after A
+        b_activation_step = None
+        for entry in message_log:
+            if entry["after"]["B"] != ReCoNState.INACTIVE and b_activation_step is None:
+                b_activation_step = entry["step"]
+                break
+        
+        assert b_activation_step is not None
+        assert b_activation_step > 0  # B activates after step 0
+    
+    def test_backward_compatibility_with_table1(self):
+        """Enhanced protocol should be fully backward compatible with Table 1."""
+        # Create standard ReCoN graph as specified in paper
+        graph = ReCoNGraph()
+        
+        # Standard script nodes
+        for node_id in ["A", "B", "C"]:
+            graph.add_node(node_id, "script")
+        
+        # Standard por/ret sequence
+        graph.add_link("A", "B", "por")
+        graph.add_link("B", "C", "por")
+        
+        # Standard terminal
+        graph.add_node("T", "terminal")
+        graph.add_link("C", "T", "sub")
+        
+        graph.request_root("A")
+        
+        # Should execute exactly as in Table 1 specification
+        execution_log = []
+        
+        for step in range(10):
+            states = {nid: graph.get_node(nid).state for nid in ["A", "B", "C", "T"]}
+            messages_A = graph.get_node("A").get_outgoing_messages({})
+            messages_B = graph.get_node("B").get_outgoing_messages({})
+            
+            execution_log.append({
+                "step": step,
+                "states": states,
+                "A_messages": messages_A,
+                "B_messages": messages_B
+            })
+            
+            graph.propagate_step()
+            
+            # Auto-confirm terminal when C is waiting
+            if graph.get_node("C").state == ReCoNState.WAITING:
+                graph.get_node("T").state = ReCoNState.CONFIRMED
+        
+        # Verify Table 1 compliance
+        # A should send inhibit_request via por when active
+        active_A_log = [entry for entry in execution_log if entry["states"]["A"] == ReCoNState.ACTIVE]
+        if active_A_log:
+            assert active_A_log[0]["A_messages"].get("por") == "inhibit_request"
+        
+        # B should be suppressed initially
+        initial_states = execution_log[1]["states"]  # After first propagation
+        assert initial_states["B"] == ReCoNState.SUPPRESSED
+        
+        # Sequence should execute in order
+        activation_order = []
+        for entry in execution_log:
+            for node_id in ["A", "B", "C"]:
+                if (entry["states"][node_id] == ReCoNState.ACTIVE and 
+                    node_id not in activation_order):
+                    activation_order.append(node_id)
+        
+        assert activation_order == ["A", "B", "C"]
+
+
+class TestMessageProtocolIntegration:
+    """Test enhanced message protocol in complex scenarios."""
+    
+    def test_neural_hybrid_message_conversion(self):
+        """Test message conversion in mixed neural/symbolic graphs."""
+        graph = ReCoNGraph()
+        
+        # Symbolic script -> Hybrid neural -> Standard terminal
+        graph.add_node("Symbolic", "script")
+        graph.add_node("Hybrid", "hybrid") 
+        graph.add_node("Terminal", "terminal")
+        
+        graph.add_link("Symbolic", "Hybrid", "sub")
+        graph.add_link("Hybrid", "Terminal", "sub")
+        
+        # Configure hybrid for neural mode
+        hybrid_node = graph.get_node("Hybrid")
+        hybrid_node.set_execution_mode("neural")
+        
+        graph.request_root("Symbolic")
+        
+        # Should handle message conversion automatically
+        for _ in range(8):
+            graph.propagate_step()
+            
+            # Auto-confirm terminal
+            if graph.get_node("Hybrid").state == ReCoNState.WAITING:
+                graph.get_node("Terminal").state = ReCoNState.CONFIRMED
+        
+        # All nodes should reach appropriate terminal states
+        assert graph.get_node("Symbolic").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+        assert graph.get_node("Hybrid").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED] 
+        assert graph.get_node("Terminal").state == ReCoNState.CONFIRMED
+    
+    def test_probabilistic_alternative_selection(self):
+        """Test probabilistic selection among alternatives using continuous messages."""
+        graph = ReCoNGraph()
+        
+        # Probabilistic selector with weighted alternatives
+        graph.add_node("Selector", "script")
+        graph.add_node("Option_1", "terminal")
+        graph.add_node("Option_2", "terminal") 
+        graph.add_node("Option_3", "terminal")
+        
+        for option in ["Option_1", "Option_2", "Option_3"]:
+            graph.add_link("Selector", option, "sub")
+        
+        # Configure probabilistic weights
+        opt1 = graph.get_node("Option_1")
+        opt1.measurement_fn = lambda env: 0.3  # Low probability
+        
+        opt2 = graph.get_node("Option_2")
+        opt2.measurement_fn = lambda env: 0.9  # High probability
+        
+        opt3 = graph.get_node("Option_3") 
+        opt3.measurement_fn = lambda env: 0.6  # Medium probability
+        
+        graph.request_root("Selector")
+        
+        # Run probabilistic selection
+        for _ in range(8):
+            graph.propagate_step()
+        
+        # Highest probability option should win
+        assert graph.get_node("Option_2").state == ReCoNState.CONFIRMED
+        assert graph.get_node("Selector").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+    
+    def test_multi_modal_message_aggregation(self):
+        """Test message aggregation across different modalities."""
+        node = ReCoNNode("multimodal", node_type="hybrid")
+        node.set_execution_mode("neural")
+        
+        # Add messages from different modalities
+        # Visual message (2D tensor)
+        visual_msg = ReCoNMessage("Vision", "multimodal", "sub", MessageType.REQUEST, torch.randn(8, 8))
+        node.add_incoming_message(visual_msg)
+        
+        # Audio message (1D tensor)
+        audio_msg = ReCoNMessage("Audio", "multimodal", "sub", MessageType.REQUEST, torch.randn(16))
+        node.add_incoming_message(audio_msg)
+        
+        # Text message (discrete)
+        text_msg = ReCoNMessage("Text", "multimodal", "sub", MessageType.REQUEST, 1.0)
+        node.add_incoming_message(text_msg)
+        
+        # Should aggregate multi-modal inputs
+        combined = node.get_link_activation("sub")
+        
+        # Should produce meaningful aggregation
+        assert combined is not None
+        if isinstance(combined, torch.Tensor):
+            assert combined.numel() > 0
+        else:
+            assert isinstance(combined, (int, float))
+    
+    def test_message_protocol_performance(self):
+        """Test message protocol performance with large graphs."""
+        graph = ReCoNGraph()
+        
+        # Create large fan-out structure
+        graph.add_node("Root", "script")
+        
+        num_children = 20
+        for i in range(num_children):
+            child_id = f"Child_{i}"
+            terminal_id = f"Terminal_{i}"
+            
+            graph.add_node(child_id, "script")
+            graph.add_node(terminal_id, "terminal")
+            
+            graph.add_link("Root", child_id, "sub")
+            graph.add_link(child_id, terminal_id, "sub")
+        
+        graph.request_root("Root")
+        
+        # Should handle large message volumes efficiently
+        start_time = torch.cuda.Event(enable_timing=True) if torch.cuda.is_available() else None
+        end_time = torch.cuda.Event(enable_timing=True) if torch.cuda.is_available() else None
+        
+        if start_time:
+            start_time.record()
+        
+        # Run execution
+        for step in range(10):
+            graph.propagate_step()
+            
+            # Auto-confirm terminals
+            for i in range(num_children):
+                terminal = graph.get_node(f"Terminal_{i}")
+                if graph.get_node(f"Child_{i}").state == ReCoNState.WAITING:
+                    terminal.state = ReCoNState.CONFIRMED
+        
+        if end_time:
+            end_time.record()
+            torch.cuda.synchronize()
+            elapsed = start_time.elapsed_time(end_time)
+            assert elapsed < 1000  # Should complete within 1 second
+        
+        # Should complete successfully
+        assert graph.get_node("Root").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+    
+    def test_enhanced_protocol_extensibility(self):
+        """Test that enhanced protocol is extensible for future features."""
+        # Custom message type
+        class CustomMessageType:
+            PRIORITY_REQUEST = "priority_request"
+            BATCH_CONFIRM = "batch_confirm"
+        
+        node = ReCoNNode("extensible", node_type="script")
+        
+        # Add custom message handling
+        def custom_message_handler(message_type, activation):
+            if message_type == CustomMessageType.PRIORITY_REQUEST:
+                return activation * 2.0  # Amplify priority messages
+            elif message_type == CustomMessageType.BATCH_CONFIRM:
+                return activation if isinstance(activation, torch.Tensor) else torch.tensor([activation])
+            return activation
+        
+        node.custom_message_handler = custom_message_handler
+        
+        # Test custom message processing
+        if hasattr(node, 'custom_message_handler'):
+            priority_result = node.custom_message_handler(CustomMessageType.PRIORITY_REQUEST, 0.5)
+            assert priority_result == 1.0
+            
+            batch_result = node.custom_message_handler(CustomMessageType.BATCH_CONFIRM, 0.8)
+            assert isinstance(batch_result, torch.Tensor)
+        
+        # Should maintain normal operation
+        inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
+        messages = node.update_state(inputs)
+        assert isinstance(messages, dict)

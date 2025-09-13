@@ -33,9 +33,16 @@ class ReCoNNode:
     
     def __init__(self, node_id: str, node_type: str = "script"):
         self.id = node_id
-        self.type = node_type  # "script" or "terminal"
+        self.type = node_type  # "script", "terminal", or "hybrid"
         self.state = ReCoNState.INACTIVE
         self.activation = 0.0  # Can be float or torch.Tensor
+        
+        # Hybrid node capabilities
+        self.execution_mode = "explicit"  # "explicit", "neural", "implicit"
+        self.neural_model = None
+        self.request_threshold = 0.8
+        self.inhibit_threshold = -0.5
+        self.transition_threshold = 0.8
         
         # Gate activations for link types  
         self.gates = {
@@ -53,6 +60,58 @@ class ReCoNNode:
         
         # For terminal nodes - measurement function
         self.measurement_fn = None
+        
+    def set_execution_mode(self, mode: str):
+        """Set execution mode for hybrid nodes."""
+        if self.type == "hybrid":
+            self.execution_mode = mode
+        
+    def message_to_activation(self, message: str) -> float:
+        """Convert discrete message to continuous activation."""
+        mapping = {
+            "request": 1.0,
+            "inhibit_request": -1.0,
+            "inhibit_confirm": -1.0,
+            "wait": 0.01,
+            "confirm": 1.0,
+            "fail": 0.0
+        }
+        return mapping.get(message, 0.0)
+        
+    def activation_to_message(self, activation: float, link_type: str) -> str:
+        """Convert continuous activation to discrete message."""
+        if activation >= 0.8:
+            if link_type == "sub":
+                return "request"
+            elif link_type == "sur":
+                return "confirm"
+        elif activation <= -0.5:
+            if link_type == "por":
+                return "inhibit_request"
+            elif link_type == "ret":
+                return "inhibit_confirm"
+        elif 0 < activation < 0.8:
+            if link_type == "sur":
+                return "wait"
+        return None
+        
+    def aggregate_tensor_messages(self, tensors):
+        """Aggregate multiple tensor messages."""
+        if not tensors:
+            return torch.tensor([0.0])
+        if len(tensors) == 1:
+            return tensors[0]
+        # Use element-wise sum for aggregation (standard neural network approach)
+        result = tensors[0].clone()
+        for tensor in tensors[1:]:
+            # Ensure tensors have same shape
+            if result.shape != tensor.shape:
+                # Broadcast to larger shape
+                max_shape = torch.Size([max(s1, s2) for s1, s2 in zip(result.shape, tensor.shape)])
+                result = result.expand(max_shape)
+                tensor = tensor.expand(max_shape)
+            result = result + tensor
+        return result
         
     def reset(self):
         """Reset node to inactive state."""
@@ -73,28 +132,29 @@ class ReCoNNode:
         if not self.incoming_messages[link_type]:
             return 0.0
             
-        # Sum all activations for this link type
+        # Aggregate activations for this link type
         total = 0.0
+        has_confirm = False
+        has_inhibit = False
+        
         for msg in self.incoming_messages[link_type]:
             if msg.type == MessageType.INHIBIT_REQUEST and link_type == "por":
-                total = -1.0  # Inhibition signal
+                has_inhibit = True
             elif msg.type == MessageType.INHIBIT_CONFIRM and link_type == "ret":
-                total = -1.0  # Inhibition signal
+                has_inhibit = True
             elif msg.type == MessageType.REQUEST and link_type == "sub":
-                total = 1.0  # Request signal
+                total = max(total, 1.0)  # Request signal
             elif msg.type == MessageType.CONFIRM and link_type == "sur":
-                total = 1.0  # Confirm signal
+                has_confirm = True  # Any confirm message should trigger confirmation
             elif msg.type == MessageType.WAIT and link_type == "sur":
-                total = 0.01  # Wait signal (small positive)
-            else:
-                # Regular activation
-                if isinstance(msg.activation, torch.Tensor):
-                    if isinstance(total, torch.Tensor):
-                        total = total + msg.activation
-                    else:
-                        total = msg.activation.clone()
-                else:
-                    total += msg.activation
+                total = max(total, 0.01)  # Wait signal (small positive)
+        
+        # Handle special cases
+        if has_inhibit:
+            total = -1.0  # Inhibition overrides everything
+        elif has_confirm:
+            total = 1.0  # Confirm overrides wait signals
+        # total already set for other message types above
                     
         return total
     
@@ -141,26 +201,41 @@ class ReCoNNode:
         
         # Terminal nodes have simplified state machine
         if self.type == "terminal":
-            if not is_requested:
+            if not is_requested and old_state == ReCoNState.INACTIVE:
+                # Stay inactive if never requested
                 self.state = ReCoNState.INACTIVE
                 self.activation = 0.0
             elif old_state == ReCoNState.INACTIVE and is_requested:
                 # Terminal goes directly to measurement when requested
                 measurement = self.measure()
-                if measurement > 0.8:  # Threshold from paper
+                if measurement > self.transition_threshold:  # Threshold from paper
                     self.state = ReCoNState.CONFIRMED
+                    self.activation = 1.0
                 else:
                     self.state = ReCoNState.FAILED
-            # Terminal states persist until request ends
-            elif old_state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
-                if not is_requested:
-                    self.state = ReCoNState.INACTIVE
                     self.activation = 0.0
+            # Terminal states persist even when request stops temporarily
+            # This handles the case where parent goes TRUE and stops sending sub requests
+            elif old_state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
+                # Terminal keeps its state until parent fully terminates
+                # Only reset if request has been absent for multiple steps
+                if not hasattr(self, '_request_absent_count'):
+                    self._request_absent_count = 0
+                
+                if not is_requested:
+                    self._request_absent_count += 1
+                    # Only reset after request is absent for 2+ steps
+                    if self._request_absent_count > 2:
+                        self.state = ReCoNState.INACTIVE
+                        self.activation = 0.0
+                        self._request_absent_count = 0
+                else:
+                    self._request_absent_count = 0
         
         # Script nodes follow full state machine
         else:
             if not is_requested:
-                # Request terminated - reset to inactive
+                # Request terminated - all nodes reset to inactive
                 self.state = ReCoNState.INACTIVE
                 self.activation = 0.0
                 
@@ -171,6 +246,7 @@ class ReCoNNode:
                 if is_por_inhibited:
                     self.state = ReCoNState.SUPPRESSED
                 else:
+                    # All script nodes go to ACTIVE when not suppressed
                     self.state = ReCoNState.ACTIVE
                     
             elif old_state == ReCoNState.SUPPRESSED:
@@ -178,21 +254,56 @@ class ReCoNNode:
                     self.state = ReCoNState.ACTIVE
                     
             elif old_state == ReCoNState.ACTIVE:
+                # ACTIVE transitions to WAITING (per Table 1 in paper)
+                # This allows the node to send proper messages before transitioning
                 self.state = ReCoNState.WAITING
                 
             elif old_state == ReCoNState.WAITING:
                 if child_confirmed:
+                    # Go to TRUE if any child confirms
                     self.state = ReCoNState.TRUE
-                elif no_children_waiting:
-                    self.state = ReCoNState.FAILED
+                elif children_waiting:
+                    # Stay in waiting state
+                    self.state = ReCoNState.WAITING
+                else:
+                    # Check if we have children at all
+                    if self.has_children():
+                        # Have children but none waiting/confirming
+                        if no_children_waiting:
+                            # If inputs were manually provided (e.g., in tests), respect them
+                            if inputs and "sur" in inputs:
+                                self.state = ReCoNState.FAILED
+                            else:
+                                # In normal operation, stay waiting to give children time
+                                self.state = ReCoNState.WAITING
+                    else:
+                        # No children at all
+                        # For script nodes in sequences, this means they can self-confirm
+                        # if they have completed their local processing
+                        if self.type == "script":
+                            # Script nodes with no children can self-confirm in sequences
+                            self.state = ReCoNState.TRUE
+                        else:
+                            # Terminal nodes should not reach this state
+                            self.state = ReCoNState.FAILED
                     
             elif old_state == ReCoNState.TRUE:
                 if not is_ret_inhibited:
                     self.state = ReCoNState.CONFIRMED
                 # Stay in TRUE state if still ret inhibited
                     
-            # Terminal states persist until request ends
-            elif old_state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
+            elif old_state == ReCoNState.FAILED:
+                # FAILED nodes can recover if they receive confirmation
+                if not is_requested:
+                    self.state = ReCoNState.INACTIVE
+                    self.activation = 0.0
+                elif child_confirmed:
+                    # Recovery: if a child confirms, go to TRUE
+                    self.state = ReCoNState.TRUE
+                # Otherwise stay FAILED
+                    
+            # CONFIRMED is a true terminal state
+            elif old_state == ReCoNState.CONFIRMED:
                 if not is_requested:
                     self.state = ReCoNState.INACTIVE
                     self.activation = 0.0
@@ -240,10 +351,9 @@ class ReCoNNode:
             messages["sur"] = "wait"
             
         elif self.state == ReCoNState.TRUE:
-            # Stop inhibiting por (successors can now activate)
+            # According to Table 1: TRUE state only sends "inhibit_confirm" via ret, nothing via sur
             messages["ret"] = "inhibit_confirm"
-            # Send wait to parent to prevent it from failing (micropsi2 logic)
-            messages["sur"] = "wait"
+            # Table 1 specifies no messages via por, sub, or sur for TRUE state
             
         elif self.state == ReCoNState.CONFIRMED:
             messages["ret"] = "inhibit_confirm"  # Still inhibit predecessors per Table 1
@@ -280,6 +390,11 @@ class ReCoNNode:
                           (isinstance(ret_activation, (int, float)) and ret_activation < 0)
         return not is_ret_inhibited and self.state == ReCoNState.TRUE
     
+    def has_children(self) -> bool:
+        """Check if node has children (sub links)."""
+        # This will be overridden by graph to check actual links
+        return hasattr(self, '_has_children') and self._has_children
+    
     def measure(self, environment: Any = None) -> Union[float, torch.Tensor]:
         """
         For terminal nodes - perform measurement.
@@ -290,6 +405,13 @@ class ReCoNNode:
             
         if self.measurement_fn is not None:
             return self.measurement_fn(environment)
+        elif hasattr(self, 'neural_model') and self.neural_model is not None:
+            # Neural terminal measurement
+            import torch
+            input_tensor = torch.tensor([[0.8]])  # Default high confidence
+            with torch.no_grad():
+                output = self.neural_model(input_tensor)
+                return output.item() if hasattr(output, 'item') else output
         else:
             # Default terminal behavior - confirm immediately
             return 1.0

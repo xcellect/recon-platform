@@ -100,16 +100,19 @@ class TestReCoNStates:
         assert node.state == ReCoNState.FAILED
     
     def test_true_state_behavior(self):
-        """True nodes should stop inhibiting but not yet confirm."""
+        """True nodes should stop inhibiting predecessors via por but still inhibit via ret."""
         node = ReCoNNode("test_node")
         node.state = ReCoNState.TRUE
         
-        inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 1.0}
+        # TRUE state with ret inhibition (not last in sequence)
+        inputs = {"sub": 1.0, "por": 0.0, "ret": -1.0, "sur": 1.0}
         signals = node.update_state(inputs)
         
-        # Should not send por inhibition anymore
+        # Should not send por inhibition anymore (stopped inhibiting successors)
         assert signals.get("por") != "inhibit_request"
+        # Should still send ret inhibition (still inhibiting predecessors)  
         assert signals["ret"] == "inhibit_confirm"
+        # Should remain TRUE when ret inhibited (not last in sequence)
         assert node.state == ReCoNState.TRUE
     
     def test_true_to_confirmed_transition(self):

@@ -83,6 +83,9 @@ class ReCoNGraph:
         self.nodes[node_id] = node
         self.graph.add_node(node_id, node_obj=node)
         
+        # Initially set has_children to False
+        node._has_children = False
+        
         return node
     
     def add_link(self, source: str, target: str, link_type: str, weight: Union[float, torch.Tensor] = 1.0) -> ReCoNLink:
@@ -125,6 +128,10 @@ class ReCoNGraph:
         link = ReCoNLink(source, target, link_type, weight)
         self.links.append(link)
         self.graph.add_edge(source, target, link_obj=link, link_type=link_type)
+        
+        # Update has_children flag for sub links
+        if link_type == "sub":
+            self.nodes[source]._has_children = True
         
         # Create reciprocal link automatically
         reciprocal_type = None
@@ -176,7 +183,7 @@ class ReCoNGraph:
             
         self.requested_roots.add(node_id)
         
-        # Send initial request message
+        # Send initial request message and immediately process it
         root_node = self.nodes[node_id]
         message = ReCoNMessage(
             MessageType.REQUEST,
@@ -186,6 +193,12 @@ class ReCoNGraph:
             1.0
         )
         root_node.add_incoming_message(message)
+        
+        # Immediately update the root node state from INACTIVE to REQUESTED
+        if root_node.state == ReCoNState.INACTIVE:
+            # Process the request to move to REQUESTED state
+            inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
+            root_node.update_state(inputs)
     
     def stop_request(self, node_id: str):
         """Stop script execution by removing request from root node."""
@@ -262,15 +275,57 @@ class ReCoNGraph:
                     )
                     self.message_queue.append(message)
         
-        # Handle terminal node measurements
+        # Terminal nodes handle measurement in their update_state method
+        # No need for separate terminal handling here
+        
+        # Handle sequence chain propagation for backward compatibility
+        # If a node becomes TRUE and has por successors but no sub children,
+        # automatically request the next node in the sequence
+        self._handle_sequence_chain_propagation()
+    
+    def _handle_sequence_chain_propagation(self):
+        """
+        Handle backward compatibility for sequence chains.
+        
+        When a node becomes TRUE and has por successors but no sub children,
+        automatically request the next node in the sequence chain.
+        """
         for node in self.nodes.values():
-            if node.type == "terminal" and node.state == ReCoNState.ACTIVE:
-                # Terminal measurement - automatically confirm for now
-                measurement = node.measure()
-                if measurement > 0.8:  # Threshold from paper
-                    node.state = ReCoNState.CONFIRMED
-                else:
-                    node.state = ReCoNState.FAILED
+            if node.state == ReCoNState.TRUE:
+                # Check if this node has por successors
+                por_links = self.get_links(source=node.id, link_type="por")
+                # Check if this node has sub children (proper hierarchy)
+                sub_links = self.get_links(source=node.id, link_type="sub")
+                
+                # Check if node only has terminal children (if any)
+                non_terminal_children = [link for link in sub_links 
+                                       if self.nodes[link.target].type != "terminal"]
+                
+                # Only do chain propagation if:
+                # 1. Node has por successors (part of a sequence)
+                # 2. Node has no non-terminal sub children (only terminals or no children)
+                if por_links and not non_terminal_children:
+                    # This is a sequence node - propagate request to successor
+                    for por_link in por_links:
+                        successor_id = por_link.target
+                        successor_node = self.nodes[successor_id]
+                        
+                        # Only request if successor is not already requested
+                        if successor_node.state == ReCoNState.INACTIVE:
+                            # Add request message for next step
+                            message = ReCoNMessage(
+                                MessageType.REQUEST,
+                                node.id,  # source is the TRUE node
+                                successor_id,
+                                "sub",  # treat as sub request for compatibility
+                                1.0
+                            )
+                            self.message_queue.append(message)
+                            
+                            # Also add this successor to requested_roots so it gets
+                            # continuous request messages
+                            if successor_id not in self.requested_roots:
+                                self.requested_roots.add(successor_id)
     
     def is_completed(self) -> bool:
         """Check if all requested scripts have completed (confirmed or failed)."""

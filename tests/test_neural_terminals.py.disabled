@@ -1,0 +1,467 @@
+"""
+Test Neural Terminal Integration (Bonus Feature)
+
+Tests neural terminal nodes that integrate PyTorch models with ReCoN execution.
+This extends the paper's terminal concept to support neural measurement functions.
+
+Preserves the essence of Table 1 terminal behavior while adding neural capabilities.
+"""
+
+import pytest
+import torch
+import torch.nn as nn
+import numpy as np
+from recon_engine import ReCoNNode, ReCoNState, ReCoNGraph
+
+
+class SimpleClassifier(nn.Module):
+    """Simple neural classifier for testing."""
+    
+    def __init__(self, input_size=10, num_classes=2):
+        super().__init__()
+        self.fc1 = nn.Linear(input_size, 20)
+        self.fc2 = nn.Linear(20, num_classes)
+        self.relu = nn.ReLU()
+        self.softmax = nn.Softmax(dim=1)
+    
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.fc2(x)
+        return self.softmax(x)
+
+
+class ConvolutionalModel(nn.Module):
+    """CNN model for grid-based tasks like ARC-AGI."""
+    
+    def __init__(self, grid_size=8):
+        super().__init__()
+        self.conv1 = nn.Conv2d(1, 16, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(32, 1)
+        self.sigmoid = nn.Sigmoid()
+    
+    def forward(self, x):
+        # x shape: (batch, 1, height, width)
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = self.pool(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+        return self.sigmoid(x)
+
+
+class TestNeuralTerminals:
+    """Test neural terminal integration with ReCoN."""
+    
+    def test_neural_terminal_creation(self):
+        """Neural terminals should be created with model attachment."""
+        terminal = ReCoNNode("neural_term", node_type="terminal")
+        model = SimpleClassifier()
+        
+        # Attach neural model
+        terminal.neural_model = model
+        terminal.model_input_fn = lambda env: torch.randn(1, 10)
+        
+        assert hasattr(terminal, 'neural_model')
+        assert terminal.neural_model is not None
+        assert terminal.type == "terminal"
+    
+    def test_neural_measurement_function(self):
+        """Neural terminals should use model for measurement."""
+        terminal = ReCoNNode("classifier_term", node_type="terminal")
+        model = SimpleClassifier()
+        terminal.neural_model = model
+        
+        def neural_measure(environment):
+            if hasattr(terminal, 'neural_model') and terminal.neural_model:
+                # Create test input
+                test_input = torch.randn(1, 10)
+                with torch.no_grad():
+                    output = terminal.neural_model(test_input)
+                    # Return confidence of positive class
+                    return output[0, 1].item()
+            return 0.0
+        
+        terminal.measurement_fn = neural_measure
+        
+        # Test measurement
+        confidence = terminal.measure()
+        assert 0.0 <= confidence <= 1.0
+        assert isinstance(confidence, float)
+    
+    def test_neural_terminal_state_transitions(self):
+        """Neural terminals should follow Table 1 states but with neural measurement."""
+        terminal = ReCoNNode("neural_state_test", node_type="terminal")
+        model = SimpleClassifier()
+        terminal.neural_model = model
+        
+        # High confidence measurement function
+        def high_confidence_measure(env):
+            return 0.9  # Above 0.8 threshold
+        
+        terminal.measurement_fn = high_confidence_measure
+        
+        # Should start inactive
+        assert terminal.state == ReCoNState.INACTIVE
+        
+        # When requested, should measure and confirm
+        inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
+        terminal.update_state(inputs)
+        
+        assert terminal.state == ReCoNState.CONFIRMED
+    
+    def test_neural_terminal_failure_mode(self):
+        """Neural terminals should fail when confidence is low."""
+        terminal = ReCoNNode("failing_neural", node_type="terminal")
+        
+        # Low confidence measurement
+        def low_confidence_measure(env):
+            return 0.3  # Below 0.8 threshold
+        
+        terminal.measurement_fn = low_confidence_measure
+        
+        inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
+        terminal.update_state(inputs)
+        
+        assert terminal.state == ReCoNState.FAILED
+    
+    def test_convolutional_terminal_for_grids(self):
+        """Test CNN terminal for grid-based reasoning tasks."""
+        terminal = ReCoNNode("cnn_terminal", node_type="terminal")
+        model = ConvolutionalModel(grid_size=8)
+        terminal.neural_model = model
+        
+        def cnn_measure(environment):
+            if hasattr(terminal, 'neural_model') and environment is not None:
+                # Environment should be an 8x8 grid
+                grid = torch.tensor(environment, dtype=torch.float32)
+                if grid.dim() == 2:
+                    grid = grid.unsqueeze(0).unsqueeze(0)  # Add batch and channel dims
+                
+                with torch.no_grad():
+                    output = terminal.neural_model(grid)
+                    return output.item()
+            return 0.5
+        
+        terminal.measurement_fn = cnn_measure
+        
+        # Test with pattern in center
+        test_grid = np.zeros((8, 8))
+        test_grid[3:5, 3:5] = 1.0  # 2x2 pattern in center
+        
+        confidence = terminal.measure(test_grid)
+        assert 0.0 <= confidence <= 1.0
+    
+    def test_neural_terminal_in_hierarchy(self):
+        """Neural terminals should work in hierarchical ReCoN structures."""
+        graph = ReCoNGraph()
+        
+        # Create hierarchy: Parent -> Child -> Neural_Terminal
+        graph.add_node("Parent", "script")
+        graph.add_node("Child", "script") 
+        graph.add_node("Neural_Terminal", "terminal")
+        
+        graph.add_link("Parent", "Child", "sub")
+        graph.add_link("Child", "Neural_Terminal", "sub")
+        
+        # Configure neural terminal
+        terminal = graph.get_node("Neural_Terminal")
+        terminal.neural_model = SimpleClassifier()
+        
+        def reliable_measure(env):
+            return 0.95  # High confidence
+        
+        terminal.measurement_fn = reliable_measure
+        
+        graph.request_root("Parent")
+        
+        # Should propagate through hierarchy
+        for _ in range(10):
+            graph.propagate_step()
+            if graph.get_node("Parent").state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
+                break
+        
+        # Terminal should confirm, causing parent chain to confirm
+        assert graph.get_node("Neural_Terminal").state == ReCoNState.CONFIRMED
+        assert graph.get_node("Child").state == ReCoNState.CONFIRMED
+        assert graph.get_node("Parent").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+    
+    def test_multiple_neural_terminals_alternatives(self):
+        """Multiple neural terminals should provide alternative solutions."""
+        graph = ReCoNGraph()
+        
+        graph.add_node("Selector", "script")
+        graph.add_node("Option_A", "terminal")
+        graph.add_node("Option_B", "terminal")
+        graph.add_node("Option_C", "terminal")
+        
+        # All options are alternatives under selector
+        for option in ["Option_A", "Option_B", "Option_C"]:
+            graph.add_link("Selector", option, "sub")
+        
+        # Configure different confidence levels
+        option_a = graph.get_node("Option_A")
+        option_a.measurement_fn = lambda env: 0.6  # Low confidence
+        
+        option_b = graph.get_node("Option_B")
+        option_b.measurement_fn = lambda env: 0.9  # High confidence
+        
+        option_c = graph.get_node("Option_C")
+        option_c.measurement_fn = lambda env: 0.7  # Medium confidence
+        
+        graph.request_root("Selector")
+        
+        # Run until selector confirms
+        for _ in range(10):
+            graph.propagate_step()
+            if graph.get_node("Selector").state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
+                break
+        
+        # Option_B (highest confidence) should confirm
+        assert graph.get_node("Option_B").state == ReCoNState.CONFIRMED
+        assert graph.get_node("Selector").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+        
+        # Lower confidence options may fail or remain waiting
+        assert graph.get_node("Option_A").state in [ReCoNState.FAILED, ReCoNState.INACTIVE, ReCoNState.ACTIVE]
+    
+    def test_neural_terminal_tensor_activations(self):
+        """Neural terminals should handle tensor activations properly."""
+        terminal = ReCoNNode("tensor_terminal", node_type="terminal")
+        model = SimpleClassifier()
+        terminal.neural_model = model
+        
+        # Set tensor activation
+        tensor_activation = torch.tensor([0.2, 0.8, 0.1])
+        terminal.activation = tensor_activation
+        
+        def tensor_aware_measure(env):
+            # Use terminal's current activation in measurement
+            if hasattr(terminal, 'activation') and isinstance(terminal.activation, torch.Tensor):
+                # Simple aggregation of tensor values
+                return terminal.activation.max().item()
+            return 0.5
+        
+        terminal.measurement_fn = tensor_aware_measure
+        
+        inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": tensor_activation}
+        terminal.update_state(inputs)
+        
+        # Should confirm based on max tensor value (0.8 > threshold)
+        assert terminal.state == ReCoNState.CONFIRMED
+        assert isinstance(terminal.activation, torch.Tensor)
+    
+    def test_neural_terminal_batch_processing(self):
+        """Neural terminals should handle batch inputs efficiently."""
+        terminal = ReCoNNode("batch_terminal", node_type="terminal")
+        model = SimpleClassifier()
+        terminal.neural_model = model
+        
+        def batch_measure(environment):
+            if isinstance(environment, list) and len(environment) > 1:
+                # Process batch of inputs
+                batch_tensor = torch.stack([torch.tensor(item, dtype=torch.float32) for item in environment])
+                
+                with torch.no_grad():
+                    outputs = terminal.neural_model(batch_tensor)
+                    # Return average confidence across batch
+                    return outputs[:, 1].mean().item()
+            else:
+                # Single input
+                single_input = torch.randn(1, 10)
+                with torch.no_grad():
+                    output = terminal.neural_model(single_input)
+                    return output[0, 1].item()
+        
+        terminal.measurement_fn = batch_measure
+        
+        # Test with batch input
+        batch_environment = [np.random.randn(10) for _ in range(5)]
+        confidence = terminal.measure(batch_environment)
+        
+        assert 0.0 <= confidence <= 1.0
+    
+    def test_neural_terminal_learning_integration(self):
+        """Neural terminals should support model updates during execution."""
+        terminal = ReCoNNode("learning_terminal", node_type="terminal")
+        model = SimpleClassifier()
+        terminal.neural_model = model
+        
+        # Store initial parameters
+        initial_params = {name: param.clone() for name, param in model.named_parameters()}
+        
+        def adaptive_measure(environment):
+            # Simulate learning update (simplified)
+            if hasattr(terminal, 'learning_rate'):
+                # Perform gradient step (mock)
+                with torch.no_grad():
+                    for param in terminal.neural_model.parameters():
+                        param += 0.001 * torch.randn_like(param)
+            
+            # Return measurement
+            test_input = torch.randn(1, 10)
+            with torch.no_grad():
+                output = terminal.neural_model(test_input)
+                return output[0, 1].item()
+        
+        terminal.measurement_fn = adaptive_measure
+        terminal.learning_rate = 0.001
+        
+        # Measure multiple times
+        confidence1 = terminal.measure()
+        confidence2 = terminal.measure()
+        
+        # Parameters should have changed (learning)
+        final_params = {name: param.clone() for name, param in model.named_parameters()}
+        
+        param_changed = any(
+            not torch.equal(initial_params[name], final_params[name])
+            for name in initial_params.keys()
+        )
+        
+        assert param_changed  # Model should have adapted
+        assert 0.0 <= confidence1 <= 1.0
+        assert 0.0 <= confidence2 <= 1.0
+
+
+class TestNeuralTerminalIntegration:
+    """Test neural terminals in complex ReCoN scenarios."""
+    
+    def test_mixed_terminal_types_in_sequence(self):
+        """Mix of standard and neural terminals in por/ret sequences."""
+        graph = ReCoNGraph()
+        
+        # Create sequence: A -> B -> C with mixed terminals
+        graph.add_node("A", "script")
+        graph.add_node("B", "script")
+        graph.add_node("C", "script")
+        
+        graph.add_link("A", "B", "por")
+        graph.add_link("B", "C", "por")
+        
+        # A has standard terminal
+        graph.add_node("T_Standard", "terminal") 
+        graph.add_link("A", "T_Standard", "sub")
+        
+        # B has neural terminal
+        graph.add_node("T_Neural", "terminal")
+        graph.add_link("B", "T_Neural", "sub")
+        
+        neural_terminal = graph.get_node("T_Neural")
+        neural_terminal.neural_model = SimpleClassifier()
+        neural_terminal.measurement_fn = lambda env: 0.9  # High confidence
+        
+        # C has another neural terminal
+        graph.add_node("T_Neural2", "terminal")
+        graph.add_link("C", "T_Neural2", "sub")
+        
+        neural_terminal2 = graph.get_node("T_Neural2")
+        neural_terminal2.neural_model = ConvolutionalModel()
+        neural_terminal2.measurement_fn = lambda env: 0.85  # High confidence
+        
+        graph.request_root("A")
+        
+        # Should execute sequence with mixed terminal types
+        execution_order = []
+        
+        for step in range(20):
+            graph.propagate_step()
+            
+            # Track activation order
+            for node_id in ["A", "B", "C"]:
+                if (graph.get_node(node_id).state == ReCoNState.ACTIVE and 
+                    node_id not in execution_order):
+                    execution_order.append(node_id)
+            
+            # Auto-confirm standard terminal
+            if graph.get_node("A").state == ReCoNState.WAITING:
+                graph.get_node("T_Standard").state = ReCoNState.CONFIRMED
+        
+        # Should maintain proper sequence execution
+        assert execution_order == ["A", "B", "C"]
+        assert graph.get_node("T_Neural").state == ReCoNState.CONFIRMED
+        assert graph.get_node("T_Neural2").state == ReCoNState.CONFIRMED
+    
+    def test_neural_terminal_failure_recovery(self):
+        """Neural terminals should support failure recovery patterns."""
+        graph = ReCoNGraph()
+        
+        # Create alternative paths: Parent -> [Path_A, Path_B]
+        graph.add_node("Parent", "script")
+        graph.add_node("Path_A", "script")
+        graph.add_node("Path_B", "script")
+        
+        graph.add_link("Parent", "Path_A", "sub")
+        graph.add_link("Parent", "Path_B", "sub")
+        
+        # Path_A has failing neural terminal
+        graph.add_node("Failing_Neural", "terminal")
+        graph.add_link("Path_A", "Failing_Neural", "sub")
+        
+        failing_terminal = graph.get_node("Failing_Neural")
+        failing_terminal.measurement_fn = lambda env: 0.2  # Low confidence - will fail
+        
+        # Path_B has successful neural terminal
+        graph.add_node("Success_Neural", "terminal")
+        graph.add_link("Path_B", "Success_Neural", "sub")
+        
+        success_terminal = graph.get_node("Success_Neural")
+        success_terminal.measurement_fn = lambda env: 0.95  # High confidence
+        
+        graph.request_root("Parent")
+        
+        # Run until parent resolves
+        for _ in range(10):
+            graph.propagate_step()
+            if graph.get_node("Parent").state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
+                break
+        
+        # Path_A should fail, Path_B should succeed, Parent should succeed
+        assert graph.get_node("Failing_Neural").state == ReCoNState.FAILED
+        assert graph.get_node("Success_Neural").state == ReCoNState.CONFIRMED
+        assert graph.get_node("Parent").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+    
+    def test_arc_agi_pattern_recognition(self):
+        """Test neural terminals for ARC-AGI style pattern recognition."""
+        graph = ReCoNGraph()
+        
+        # Pattern recognition pipeline
+        graph.add_node("Pattern_Analyzer", "script")
+        graph.add_node("Shape_Detector", "terminal")
+        graph.add_node("Color_Detector", "terminal") 
+        graph.add_node("Size_Detector", "terminal")
+        
+        graph.add_link("Pattern_Analyzer", "Shape_Detector", "sub")
+        graph.add_link("Pattern_Analyzer", "Color_Detector", "sub")
+        graph.add_link("Pattern_Analyzer", "Size_Detector", "sub")
+        
+        # Configure neural detectors
+        shape_detector = graph.get_node("Shape_Detector")
+        shape_detector.neural_model = ConvolutionalModel()
+        shape_detector.measurement_fn = lambda env: 0.8  # Detects rectangle
+        
+        color_detector = graph.get_node("Color_Detector")
+        color_detector.measurement_fn = lambda env: 0.9  # Detects blue
+        
+        size_detector = graph.get_node("Size_Detector")
+        size_detector.measurement_fn = lambda env: 0.7  # Detects medium size
+        
+        # Test grid with blue rectangle
+        test_grid = np.zeros((8, 8))
+        test_grid[2:6, 3:7] = 1.0  # Rectangle pattern
+        
+        graph.request_root("Pattern_Analyzer")
+        
+        # Should activate all detectors in parallel
+        for _ in range(5):
+            graph.propagate_step()
+        
+        # At least one detector should confirm (OR semantics)
+        detectors_confirmed = [
+            graph.get_node("Shape_Detector").state == ReCoNState.CONFIRMED,
+            graph.get_node("Color_Detector").state == ReCoNState.CONFIRMED,
+            graph.get_node("Size_Detector").state == ReCoNState.CONFIRMED
+        ]
+        
+        assert any(detectors_confirmed)
+        assert graph.get_node("Pattern_Analyzer").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]

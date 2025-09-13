@@ -305,7 +305,6 @@ class BlindSquirrelStateGraph:
             assert self.milestones[key] == state
         else:
             self.milestones[key] = state
-            print(f"🏁 Milestone added: game={state.game_id}, score={state.score}")
 
     def update(self, prev_state: BlindSquirrelState, action: int, new_state: BlindSquirrelState):
         """Update state graph with new transition."""
@@ -349,7 +348,6 @@ class BlindSquirrelStateGraph:
 
             # Train model if epsilon condition is met (matches original)
             if self.EPSILON < 1:
-                print(f"🚀 TRAINING TRIGGERED: game={game_id}, score {score}→{new_state.score}")
                 self.train_model(game_id, score + 1)
 
         else:
@@ -452,23 +450,19 @@ class BlindSquirrelStateGraph:
 
         # Collect training data from all levels
         training_data = []
-        print(f"🔍 Looking for milestones: game={game_id}, max_score={max_score}")
-        print(f"🔍 Available milestones: {list(self.milestones.keys())}")
-        
         for score in range(max_score):
             old_milestone = self.milestones.get((game_id, score))
             new_milestone = self.milestones.get((game_id, score + 1))
-            
-            print(f"🔍 Score {score}: old_milestone={old_milestone is not None}, new_milestone={new_milestone is not None}")
 
             if old_milestone and new_milestone:
                 level_data = self.get_level_training_data(old_milestone, new_milestone)
                 training_data.extend(level_data)
-                print(f"🔍 Added {len(level_data)} training examples for score {score}→{score+1}")
 
         if training_data:
             if verbose:
                 print(f"Training model with {len(training_data)} examples")
+            # Set current level for training messages
+            self.trainer.current_level = max_score
             self.trainer.train_model(training_data, verbose=verbose)
         else:
             if verbose:

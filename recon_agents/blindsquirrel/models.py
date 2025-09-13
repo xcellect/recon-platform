@@ -181,7 +181,7 @@ class BlindSquirrelTrainer:
 
             avg_loss = total_loss / num_batches if num_batches > 0 else 0
             if verbose:
-                print(f"Epoch {epoch+1}/{self.num_epochs}, Loss: {avg_loss:.4f}")
+                print(f"Model Training | {self.model.game_id} - level {getattr(self, 'current_level', 1)} | {len(training_data)} frames | Epoch {epoch+1}/{self.num_epochs} | Loss: {avg_loss:.4f}")
 
         self.model.eval()
 

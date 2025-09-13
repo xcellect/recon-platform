@@ -60,11 +60,6 @@ class BlindSquirrelReCoN(Agent):
 
         try:
             if self.blindsquirrel_agent:
-                # Debug: Check state before processing
-                prev_action_before = getattr(self.blindsquirrel_agent, 'prev_action', None)
-                if latest_frame.score > 0:  # Only log when there's progress
-                    print(f"🔍 is_done: game={latest_frame.game_id}, score={latest_frame.score}, prev_action={prev_action_before}")
-                
                 # Process frame first (like original)
                 self.blindsquirrel_agent.process_latest_frame(latest_frame)
                 
@@ -119,10 +114,6 @@ class BlindSquirrelReCoN(Agent):
                 # Update state for next iteration (like original)
                 self.blindsquirrel_agent.prev_state = current_state  # This should be a state object, not string
                 self.blindsquirrel_agent.prev_action = action_idx
-                
-                # Debug: Log action selection
-                if latest_frame.score > 0:
-                    print(f"🎯 choose_action: game={latest_frame.game_id}, score={latest_frame.score}, selected_action={action_idx}")
                 
                 # Convert action data to GameAction enum for harness
                 return self._convert_action_data(action_data)

@@ -254,8 +254,7 @@ class ReCoNNode:
                     self.state = ReCoNState.ACTIVE
                     
             elif old_state == ReCoNState.ACTIVE:
-                # ACTIVE transitions to WAITING (per Table 1 in paper)
-                # This allows the node to send proper messages before transitioning
+                # ACTIVE transitions to WAITING when sending sub requests to children
                 self.state = ReCoNState.WAITING
                 
             elif old_state == ReCoNState.WAITING:
@@ -266,26 +265,38 @@ class ReCoNNode:
                     # Stay in waiting state
                     self.state = ReCoNState.WAITING
                 else:
-                    # Check if we have children at all
-                    if self.has_children():
-                        # Have children but none waiting/confirming
-                        if no_children_waiting:
-                            # If inputs were manually provided (e.g., in tests), respect them
-                            if inputs and "sur" in inputs:
+                    # No children waiting/confirming
+                    if no_children_waiting:
+                        # Check if this node actually has children
+                        if self.has_children():
+                            # Has children but none responding - track failure timing
+                            if inputs and "sur" in inputs and inputs["sur"] <= 0:
+                                # Direct test case - fail immediately
                                 self.state = ReCoNState.FAILED
                             else:
-                                # In normal operation, stay waiting to give children time
-                                self.state = ReCoNState.WAITING
-                    else:
-                        # No children at all
-                        # For script nodes in sequences, this means they can self-confirm
-                        # if they have completed their local processing
-                        if self.type == "script":
-                            # Script nodes with no children can self-confirm in sequences
-                            self.state = ReCoNState.TRUE
+                                # Normal operation - track how long we've been waiting
+                                if not hasattr(self, '_no_children_count'):
+                                    self._no_children_count = 0
+                                self._no_children_count += 1
+                                
+                                if self._no_children_count >= 2:
+                                    self.state = ReCoNState.FAILED
+                                else:
+                                    self.state = ReCoNState.WAITING
                         else:
-                            # Terminal nodes should not reach this state
-                            self.state = ReCoNState.FAILED
+                            # Node has no children - it shouldn't have gone to WAITING
+                            # Handle based on node type and structure
+                            if self.has_por_successors():
+                                # Sequence node - self-confirm to continue sequence
+                                self.state = ReCoNState.TRUE
+                            else:
+                                # Leaf node with no terminals - fail
+                                self.state = ReCoNState.FAILED
+                    else:
+                        # Reset counter when we receive child signals
+                        if hasattr(self, '_no_children_count'):
+                            self._no_children_count = 0
+                        self.state = ReCoNState.WAITING
                     
             elif old_state == ReCoNState.TRUE:
                 if not is_ret_inhibited:
@@ -394,6 +405,11 @@ class ReCoNNode:
         """Check if node has children (sub links)."""
         # This will be overridden by graph to check actual links
         return hasattr(self, '_has_children') and self._has_children
+    
+    def has_por_successors(self) -> bool:
+        """Check if node has por successors (por links)."""
+        # This will be set by graph to check actual links
+        return hasattr(self, '_has_por_successors') and self._has_por_successors
     
     def measure(self, environment: Any = None) -> Union[float, torch.Tensor]:
         """

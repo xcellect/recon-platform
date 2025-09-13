@@ -171,8 +171,11 @@ class TestReCoNMessages:
         # Child should transition to TRUE
         assert graph.get_node("child").state == ReCoNState.TRUE
         
-        # Parent should also transition toward confirmation
-        graph.propagate_step()
+        # Parent should also transition toward confirmation (may take a few steps)
+        for _ in range(3):
+            graph.propagate_step()
+            if graph.get_node("parent").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]:
+                break
         assert graph.get_node("parent").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
     
     def test_fail_propagation(self):

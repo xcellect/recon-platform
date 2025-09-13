@@ -76,11 +76,11 @@ class TestReCoNSequences:
         # Step 1: Parent INACTIVE->REQUESTED  
         # Step 2: Parent REQUESTED->ACTIVE (generates request to A)
         # Step 3: Parent ACTIVE->WAITING, A INACTIVE->REQUESTED
-        # Step 4: A REQUESTED->ACTIVE (no por inhibition)
+        # Step 4: A REQUESTED->ACTIVE->WAITING (has terminal child)
         for _ in range(4):
             graph.propagate_step()
             
-        assert graph.get_node("A").state == ReCoNState.ACTIVE
+        assert graph.get_node("A").state == ReCoNState.WAITING
         # B remains INACTIVE because it's never requested via sub (no parent requests it)
         # B would only become SUPPRESSED if it were REQUESTED first
         assert graph.get_node("B").state == ReCoNState.INACTIVE

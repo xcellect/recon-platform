@@ -83,8 +83,9 @@ class ReCoNGraph:
         self.nodes[node_id] = node
         self.graph.add_node(node_id, node_obj=node)
         
-        # Initially set has_children to False
+        # Initially set link flags to False
         node._has_children = False
+        node._has_por_successors = False
         
         return node
     
@@ -129,9 +130,11 @@ class ReCoNGraph:
         self.links.append(link)
         self.graph.add_edge(source, target, link_obj=link, link_type=link_type)
         
-        # Update has_children flag for sub links
+        # Update link flags
         if link_type == "sub":
             self.nodes[source]._has_children = True
+        elif link_type == "por":
+            self.nodes[source]._has_por_successors = True
         
         # Create reciprocal link automatically
         reciprocal_type = None

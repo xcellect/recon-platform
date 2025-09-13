@@ -47,6 +47,8 @@ class TestReCoNStates:
         """Active nodes should request children and send wait to parent."""
         node = ReCoNNode("test_node")
         node.state = ReCoNState.ACTIVE
+        # Set up node as if it has children (for Table 1 compliance testing)
+        node._has_children = True
         
         inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
         signals = node.update_state(inputs)

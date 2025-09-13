@@ -2,10 +2,12 @@
 BlindSquirrel ReCoN Agent - Harness Adapter
 
 Adapter that connects the BlindSquirrel ReCoN agent to the ARC-AGI-3-Agents harness.
+Maintains EXACT same flow as original BlindSquirrel implementation.
 """
 
 import sys
 import os
+import random
 from typing import Any, List, Optional
 
 # Add recon-platform to path
@@ -21,9 +23,14 @@ BlindSquirrelAgent = None
 class BlindSquirrelReCoN(Agent):
     """
     BlindSquirrel agent adapter for ARC-AGI-3-Agents harness.
-
-    Bridges the BlindSquirrel ReCoN implementation to the competition harness.
+    
+    Maintains EXACT flow as original:
+    1. is_done() processes frame and checks WIN
+    2. choose_action() assumes frame already processed by is_done()
     """
+    
+    # Match original BlindSquirrel MAX_ACTIONS (50000 instead of default 80)
+    MAX_ACTIONS: int = 50000
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,25 +50,23 @@ class BlindSquirrelReCoN(Agent):
                 print(f"Error initializing BlindSquirrel ReCoN agent: {e}")
                 self.blindsquirrel_agent = None
 
-    def process_latest_frame(self, latest_frame: FrameData):
-        """Process the latest frame using BlindSquirrel logic."""
-        self._ensure_agent()
-
-        try:
-            if self.blindsquirrel_agent:
-                self.blindsquirrel_agent.process_latest_frame(latest_frame)
-        except Exception as e:
-            print(f"Error processing frame in BlindSquirrel ReCoN: {e}")
-            # Continue with fallback behavior
-
     def is_done(self, frames: List[FrameData], latest_frame: FrameData) -> bool:
-        """Check if the agent is done."""
+        """
+        Check if agent is done - EXACT original flow.
+        
+        Original: is_done() calls process_latest_frame() then checks WIN
+        """
         self._ensure_agent()
 
-        # Use BlindSquirrel's is_done logic (it processes frame internally)
         try:
             if self.blindsquirrel_agent:
-                return self.blindsquirrel_agent.is_done(frames, latest_frame)
+                # Process frame first (like original)
+                self.blindsquirrel_agent.process_latest_frame(latest_frame)
+                
+                # Check WIN condition (like original)
+                if latest_frame.state is GameState.WIN:
+                    return True
+                return False
             else:
                 return latest_frame.state == GameState.WIN
         except Exception as e:
@@ -70,24 +75,48 @@ class BlindSquirrelReCoN(Agent):
             return latest_frame.state == GameState.WIN
 
     def choose_action(self, frames: List[FrameData], latest_frame: FrameData) -> GameAction:
-        """Choose an action based on the current state."""
+        """
+        Choose action - EXACT original flow.
+        
+        Original: choose_action() assumes frame already processed by is_done()
+        """
         self._ensure_agent()
 
-        # Handle special cases
+        # Handle special cases (same as original)
         if latest_frame.state in (GameState.NOT_PLAYED, GameState.GAME_OVER):
             return GameAction.RESET
 
-        # Use BlindSquirrel ReCoN agent for action selection
         try:
             if self.blindsquirrel_agent:
-                # Use choose_action method to separate from frame processing in is_done
-                action_data = self.blindsquirrel_agent._choose_action(latest_frame)
-
-                # Convert action data to GameAction
-                if action_data is not None:
-                    return self._convert_action_data(action_data)
-                else:
+                # EXACT original logic: use epsilon-greedy selection
+                current_state = self.blindsquirrel_agent.current_state
+                if not current_state:
                     return self._get_fallback_action(latest_frame)
+
+                # Original logic: check epsilon, score, and future states
+                AGENT_E = getattr(self.blindsquirrel_agent, 'EPSILON', 0.5)
+                use_model = (
+                    AGENT_E < random.random() and 
+                    latest_frame.score > 0 and 
+                    len(current_state.future_states) > 0 and
+                    hasattr(self.blindsquirrel_agent.state_graph, 'action_model') and
+                    self.blindsquirrel_agent.state_graph.action_model is not None
+                )
+
+                if use_model:
+                    action_idx = self.blindsquirrel_agent._get_model_action()
+                else:
+                    action_idx = self.blindsquirrel_agent._get_rweights_action()
+
+                # Get action data from ReCoN implementation
+                action_data = current_state.get_action_obj(action_idx)
+                
+                # Update state for next iteration (like original)
+                self.blindsquirrel_agent.prev_state = current_state
+                self.blindsquirrel_agent.prev_action = action_idx
+                
+                # Convert action data to GameAction enum for harness
+                return self._convert_action_data(action_data)
             else:
                 return self._get_fallback_action(latest_frame)
 
@@ -96,7 +125,7 @@ class BlindSquirrelReCoN(Agent):
             return self._get_fallback_action(latest_frame)
 
     def _convert_action_data(self, action_data: Any) -> GameAction:
-        """Convert BlindSquirrel action data to GameAction enum."""
+        """Convert ReCoN action data to GameAction enum for harness."""
         if isinstance(action_data, dict):
             if action_data.get('type') == 'basic':
                 action_id = action_data.get('action_id', 0)
@@ -113,8 +142,11 @@ class BlindSquirrelReCoN(Agent):
                 else:
                     return GameAction.ACTION1
             elif action_data.get('type') == 'click':
-                # For click actions, return ACTION6 (click action)
-                return GameAction.ACTION6
+                # For click actions, create ACTION6 with position data
+                click_action = GameAction.ACTION6
+                if 'x' in action_data and 'y' in action_data:
+                    click_action.set_data({"x": action_data['x'], "y": action_data['y']})
+                return click_action
             else:
                 return GameAction.ACTION1
         elif isinstance(action_data, int):

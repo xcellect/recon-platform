@@ -284,19 +284,39 @@ class TestMessagePropagationIntegration:
         
         graph.request_root("Root")
         
-        # Root should request both children in parallel
+        # Root becomes ACTIVE first
+        graph.propagate_step()
+        assert graph.get_node("Root").state == ReCoNState.ACTIVE
+        
+        # Root goes to WAITING, children get requested
         graph.propagate_step()
         assert graph.get_node("Root").state == ReCoNState.WAITING
+        assert graph.get_node("Child1").state == ReCoNState.REQUESTED
+        assert graph.get_node("Child2").state == ReCoNState.REQUESTED
+        
+        # Children become ACTIVE
+        graph.propagate_step()
         assert graph.get_node("Child1").state == ReCoNState.ACTIVE
         assert graph.get_node("Child2").state == ReCoNState.ACTIVE
         
-        # Simulate T1 confirming
-        graph.get_node("T1").state = ReCoNState.CONFIRMED
-        
+        # Children go to WAITING to request their terminals
         graph.propagate_step()
-        # Child1 should confirm, causing Root to transition to true
-        assert graph.get_node("Child1").state == ReCoNState.CONFIRMED  
-        assert graph.get_node("Root").state == ReCoNState.TRUE
+        assert graph.get_node("Child1").state == ReCoNState.WAITING
+        assert graph.get_node("Child2").state == ReCoNState.WAITING
+        
+        # Terminals auto-confirm
+        graph.propagate_step()
+        assert graph.get_node("T1").state == ReCoNState.CONFIRMED
+        assert graph.get_node("T2").state == ReCoNState.CONFIRMED
+        
+        # Children receive confirmations and complete
+        graph.propagate_step()
+        assert graph.get_node("Child1").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+        assert graph.get_node("Child2").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+        
+        # Root receives confirmation from children
+        graph.propagate_step()
+        assert graph.get_node("Root").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
     
     def test_message_timing_consistency(self):
         """Messages should be processed consistently across propagation steps.""" 

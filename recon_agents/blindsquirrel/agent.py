@@ -106,7 +106,7 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
             return
 
         # Handle active game states (NOT_FINISHED, WIN)
-        if self.prev_state == 'NOT_PLAYED' or self.is_first_frame:
+        if isinstance(self.prev_state, str) or self.is_first_frame:
             # Initialize new game - create fresh StateGraph
             self.game_counter = 0
             self.level_counter = 0
@@ -120,22 +120,23 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
             self.is_first_frame = False
             return
 
-        # Regular game step processing
-        new_state = self.state_graph.get_state(latest_frame)
-
+        # Regular game step processing (like original)
+        # Store previous state for update call
+        prev_state_for_update = self.current_state
+        
+        # Get new current state
+        self.current_state = self.state_graph.get_state(latest_frame)
+        
         # Update counters
         self.game_counter += 1
-        if new_state.score > (self.current_state.score if self.current_state else -1):
+        if self.current_state.score > (prev_state_for_update.score if prev_state_for_update else -1):
             self.level_counter = 0
         else:
             self.level_counter += 1
 
-        # Update state graph with transition
-        if self.current_state and self.prev_action is not None:
-            self.state_graph.update(self.current_state, self.prev_action, new_state)
-
-        # Update current state for next iteration
-        self.current_state = new_state
+        # Update state graph with transition (like original: prev_state, action, current_state)
+        if prev_state_for_update and self.prev_action is not None:
+            self.state_graph.update(prev_state_for_update, self.prev_action, self.current_state)
 
     def process_frame(self, frame_data: Any) -> Any:
         """

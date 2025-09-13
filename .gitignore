@@ -7,3 +7,13 @@ __pycache__/
 *.pyd
 *.pyw
 *.pyz
+
+ARC-AGI-3-Agents/*
+!ARC-AGI-3-Agents/agents/
+!ARC-AGI-3-Agents/agents/blindsquirrel_recon.py
+!ARC-AGI-3-Agents/test_blindsquirrel.py
+!ARC-AGI-3-Agents/test_game_id.py 
+!ARC-AGI-3-Agents/test_no_actions.py
+!ARC-AGI-3-Agents/agents/__init__.py
+!ARC-AGI-3-Agents/pyproject.toml
+!ARC-AGI-3-Agents/uv.lock

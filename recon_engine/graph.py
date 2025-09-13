@@ -86,6 +86,7 @@ class ReCoNGraph:
         # Initially set link flags to False
         node._has_children = False
         node._has_por_successors = False
+        node._has_sequence_children = False
         
         return node
     
@@ -133,8 +134,14 @@ class ReCoNGraph:
         # Update link flags
         if link_type == "sub":
             self.nodes[source]._has_children = True
+            # Check if the child has por links (is part of sequence)
+            if hasattr(self.nodes[target], '_has_por_successors') and self.nodes[target]._has_por_successors:
+                self.nodes[source]._has_sequence_children = True
         elif link_type == "por":
             self.nodes[source]._has_por_successors = True
+            # Update parent's sequence children flag
+            for parent_link in self.get_links(target=source, link_type="sub"):
+                self.nodes[parent_link.source]._has_sequence_children = True
         
         # Create reciprocal link automatically
         reciprocal_type = None

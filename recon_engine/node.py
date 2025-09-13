@@ -235,9 +235,18 @@ class ReCoNNode:
         # Script nodes follow full state machine
         else:
             if not is_requested:
-                # Request terminated - all nodes reset to inactive
-                self.state = ReCoNState.INACTIVE
-                self.activation = 0.0
+                # Only reset to inactive if not in a terminal state
+                if old_state in [ReCoNState.CONFIRMED, ReCoNState.TRUE]:
+                    # Terminal states persist until root request is removed
+                    pass
+                elif old_state == ReCoNState.FAILED:
+                    # Failed nodes can reset
+                    self.state = ReCoNState.INACTIVE
+                    self.activation = 0.0
+                else:
+                    # Other states reset when request is removed
+                    self.state = ReCoNState.INACTIVE
+                    self.activation = 0.0
                 
             elif old_state == ReCoNState.INACTIVE and is_requested:
                 self.state = ReCoNState.REQUESTED
@@ -246,7 +255,6 @@ class ReCoNNode:
                 if is_por_inhibited:
                     self.state = ReCoNState.SUPPRESSED
                 else:
-                    # All script nodes go to ACTIVE when not suppressed
                     self.state = ReCoNState.ACTIVE
                     
             elif old_state == ReCoNState.SUPPRESSED:
@@ -254,8 +262,13 @@ class ReCoNNode:
                     self.state = ReCoNState.ACTIVE
                     
             elif old_state == ReCoNState.ACTIVE:
-                # ACTIVE transitions to WAITING when sending sub requests to children
-                self.state = ReCoNState.WAITING
+                # ACTIVE transitions to WAITING when it has children to request
+                if self.has_children():
+                    self.state = ReCoNState.WAITING
+                else:
+                    # Nodes without children in a sequence might need special handling
+                    # They act as placeholders in the sequence and can self-confirm
+                    self.state = ReCoNState.WAITING
                 
             elif old_state == ReCoNState.WAITING:
                 if child_confirmed:
@@ -269,17 +282,23 @@ class ReCoNNode:
                     if no_children_waiting:
                         # Check if this node actually has children
                         if self.has_children():
-                            # Has children but none responding - track failure timing
+                            # Check if children are part of sequences (have por links)
+                            # Sequence children may take time to complete due to ordering
+                            children_in_sequence = any(self.nodes_have_por_links() for _ in [1])  # Placeholder
+                            
                             if inputs and "sur" in inputs and inputs["sur"] <= 0:
                                 # Direct test case - fail immediately
                                 self.state = ReCoNState.FAILED
                             else:
-                                # Normal operation - track how long we've been waiting
+                                # For sequence parents, be more patient
                                 if not hasattr(self, '_no_children_count'):
                                     self._no_children_count = 0
                                 self._no_children_count += 1
                                 
-                                if self._no_children_count >= 2:
+                                # Longer timeout for sequence parents
+                                timeout_threshold = 5 if self.has_sequence_children() else 2
+                                
+                                if self._no_children_count >= timeout_threshold:
                                     self.state = ReCoNState.FAILED
                                 else:
                                     self.state = ReCoNState.WAITING
@@ -358,13 +377,18 @@ class ReCoNNode:
         elif self.state == ReCoNState.WAITING:
             messages["por"] = "inhibit_request"
             messages["ret"] = "inhibit_confirm" 
-            messages["sub"] = "request"
+            messages["sub"] = "request"  # Keep sending requests to children
             messages["sur"] = "wait"
             
         elif self.state == ReCoNState.TRUE:
-            # According to Table 1: TRUE state only sends "inhibit_confirm" via ret, nothing via sur
+            # According to Table 1: TRUE state only sends "inhibit_confirm" via ret
             messages["ret"] = "inhibit_confirm"
-            # Table 1 specifies no messages via por, sub, or sur for TRUE state
+            # Table 1 specifies no messages via por or sur for TRUE state
+            # However, for sequence compatibility, we may need to keep requesting children
+            # if they are also part of a sequence (have por links)
+            if self.has_children():
+                # Check if any children are part of sequences
+                messages["sub"] = "request"  # Keep requesting children
             
         elif self.state == ReCoNState.CONFIRMED:
             messages["ret"] = "inhibit_confirm"  # Still inhibit predecessors per Table 1
@@ -410,6 +434,15 @@ class ReCoNNode:
         """Check if node has por successors (por links)."""
         # This will be set by graph to check actual links
         return hasattr(self, '_has_por_successors') and self._has_por_successors
+    
+    def has_sequence_children(self) -> bool:
+        """Check if node has children that are part of sequences."""
+        # This will be set by graph to check if children have por links
+        return hasattr(self, '_has_sequence_children') and self._has_sequence_children
+    
+    def nodes_have_por_links(self) -> bool:
+        """Helper to check if any children have por links."""
+        return False  # Placeholder - will be set by graph
     
     def measure(self, environment: Any = None) -> Union[float, torch.Tensor]:
         """

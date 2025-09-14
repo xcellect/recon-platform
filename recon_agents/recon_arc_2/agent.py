@@ -18,6 +18,7 @@ sys.path.insert(0, '/workspace/recon-platform')
 from recon_agents.base_agent import ReCoNBaseAgent
 from .perception import ChangePredictor, ChangePredictorTrainer
 from .hypothesis import HypothesisManager, ActionHypothesis
+from recon_engine.node import ReCoNState
 
 
 class ReCoNArc2Agent(ReCoNBaseAgent):
@@ -61,6 +62,8 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         self._pred_cache_max = 2048
         # Click policy params
         self.top_k_click_regions: int = 1
+        # R6 short-term memory to avoid immediate repeat
+        self._r6_last_centroid: Optional[Tuple[int, int]] = None
 
     def _build_architecture(self):
         """Build ReCoN architecture for active perception."""
@@ -209,9 +212,69 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
 
     def propose_click_coordinates(self, frame: np.ndarray) -> Tuple[int, int]:
         """
-        Propose click coordinates using a simple largest-region centroid heuristic.
-        Treat contiguous same-value cells as regions; return the centroid of the largest.
+        Propose click coordinates.
+        If RECON_ARC2_R6=1, prefer ReCoN-driven region selection (stub for priors integration).
+        Otherwise, use a simple largest-region centroid heuristic.
         """
+        # R6 flag: prefer ReCoN-driven region selection
+        try:
+            if os.getenv('RECON_ARC2_R6') == '1' and self.hypothesis_manager is not None:
+                regions = self._find_regions(frame)
+                if not regions:
+                    return 32, 32
+                regions.sort(key=lambda t: t[0], reverse=True)
+                k = max(1, int(self.top_k_click_regions))
+                topk = regions[:k]
+                # Compute simple priors for regions based on area (normalized)
+                priors = self._compute_region_priors(topk)
+                # Map regions to temporary action ids in a reserved range
+                base_id = 10000
+                region_ids: List[int] = []
+                for i, (_area, cx, cy) in enumerate(topk):
+                    ridx = base_id + i
+                    region_ids.append(ridx)
+                    if ridx not in self.hypothesis_manager.action_hypotheses:
+                        self.hypothesis_manager.create_action_hypothesis(ridx, 0.5, self.current_frame)
+                # Apply priors: value equal to avoid ordering bias; valid drives request timing
+                self.hypothesis_manager.set_alpha_value({rid: 0.0 for rid in region_ids})
+                self.hypothesis_manager.set_alpha_valid({rid: float(priors.get(i, 0.0)) for i, rid in enumerate(region_ids)})
+                # Terminal measurements default to succeed for selection, but do not
+                # override cooldown for recently failed regions
+                for rid in region_ids:
+                    if self.hypothesis_manager.cooldowns.get(rid, 0) > 0:
+                        continue
+                    self.hypothesis_manager.set_terminal_measurement(rid, True)
+                # Create alternatives parent and request it
+                alt = self.hypothesis_manager.create_alternatives_hypothesis(region_ids)
+                self.hypothesis_manager.request_hypothesis_test(alt)
+                for _ in range(8):
+                    self.hypothesis_manager.propagate_step()
+                # Choose the first progressed region; avoid immediately repeating last centroid
+                chosen_idx = None
+                for i, rid in enumerate(region_ids):
+                    st = self.hypothesis_manager.action_hypotheses[rid].state
+                    _, cx_i, cy_i = topk[i]
+                    if self._r6_last_centroid is not None and (cx_i, cy_i) == self._r6_last_centroid:
+                        continue
+                    if st in (ReCoNState.REQUESTED, ReCoNState.ACTIVE, ReCoNState.WAITING, ReCoNState.TRUE, ReCoNState.CONFIRMED):
+                        chosen_idx = i
+                        break
+                if chosen_idx is None:
+                    chosen_idx = int(max(range(len(topk)), key=lambda j: priors.get(j, 0.0)))
+                _, cx, cy = topk[chosen_idx]
+                # If configured to fail the first choice (for test), record failure now and advance cooldown
+                try:
+                    if os.getenv('RECON_ARC2_R6_FAIL_FIRST') == '1':
+                        chosen_rid = region_ids[chosen_idx]
+                        self.hypothesis_manager.set_terminal_measurement(chosen_rid, False)
+                        self.hypothesis_manager.propagate_step()
+                except Exception:
+                    pass
+                # Remember last centroid to avoid immediate repeat
+                self._r6_last_centroid = (cx, cy)
+                return cx, cy
+        except Exception:
+            pass
         try:
             import collections
             h, w = frame.shape
@@ -264,6 +327,53 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
             return cx, cy
         except Exception:
             return 32, 32
+
+    def _find_regions(self, frame: np.ndarray) -> List[Tuple[int, int, int]]:
+        """Identify non-background contiguous regions and return list of (area, cx, cy)."""
+        import collections
+        h, w = frame.shape
+        visited = [[False] * w for _ in range(h)]
+        regions: List[Tuple[int, int, int]] = []
+        try:
+            vals, counts = np.unique(frame, return_counts=True)
+            bg_val = int(vals[np.argmax(counts)])
+        except Exception:
+            bg_val = 0
+        for sy in range(h):
+            for sx in range(w):
+                if visited[sy][sx]:
+                    continue
+                if int(frame[sy][sx]) == bg_val:
+                    continue
+                val = frame[sy][sx]
+                q = collections.deque([(sx, sy)])
+                visited[sy][sx] = True
+                area = 0
+                sum_x = 0
+                sum_y = 0
+                while q:
+                    x, y = q.popleft()
+                    area += 1
+                    sum_x += x
+                    sum_y += y
+                    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        nx = x + dx
+                        ny = y + dy
+                        if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and frame[ny][nx] == val:
+                            visited[ny][nx] = True
+                            q.append((nx, ny))
+                cx = int(round(sum_x / max(area, 1)))
+                cy = int(round(sum_y / max(area, 1)))
+                regions.append((area, cx, cy))
+        return regions
+
+    def _compute_region_priors(self, regions: List[Tuple[int, int, int]]) -> Dict[int, float]:
+        """Compute naive priors per region index normalized by area."""
+        total_area = float(sum(a for a, _cx, _cy in regions)) or 1.0
+        priors: Dict[int, float] = {}
+        for i, (area, _cx, _cy) in enumerate(regions):
+            priors[i] = float(area) / total_area
+        return priors
 
     def _process_action_feedback(self):
         """

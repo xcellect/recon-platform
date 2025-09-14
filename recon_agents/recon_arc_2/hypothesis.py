@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.append('/workspace/recon-platform')
 
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Set
 from recon_engine.node import ReCoNNode, ReCoNState
 from recon_engine.messages import ReCoNMessage, MessageType
 from recon_engine.graph import ReCoNGraph
@@ -39,43 +39,6 @@ class ActionHypothesis(ReCoNNode):
         self.context_frame = None
         # Terminal child id (set by manager)
         self.terminal_id: Optional[str] = None
-
-    def process_message(self, message: ReCoNMessage) -> List[ReCoNMessage]:
-        """
-        Process incoming messages for hypothesis testing.
-
-        Request -> Test the hypothesis
-        Confirm -> Hypothesis was correct
-        Fail -> Hypothesis was wrong
-        """
-        responses = []
-
-        if message.type == MessageType.REQUEST:
-            # Hypothesis is being tested
-            self.state = ReCoNState.REQUESTED
-            # Send request to terminal measurement if available; otherwise to executor
-            target = self.terminal_id if self.terminal_id else "action_executor"
-            responses.append(ReCoNMessage(MessageType.REQUEST, self.id, target, "sub"))
-
-        elif message.type == MessageType.CONFIRM:
-            # Action execution succeeded (frame changed)
-            self.state = ReCoNState.CONFIRMED
-            self.tested = True
-            self.actually_changed = True
-            self.confirmation_count += 1
-
-        elif message.type == MessageType.FAIL:
-            # Action execution failed (no frame change)
-            self.state = ReCoNState.FAILED
-            self.tested = True
-            self.actually_changed = False
-            self.failure_count += 1
-
-        elif message.type == MessageType.INHIBIT_REQUEST:
-            # Stop testing this hypothesis
-            self.state = ReCoNState.INACTIVE
-
-        return responses
 
     def get_confidence(self) -> float:
         """
@@ -119,40 +82,7 @@ class SequenceHypothesis(ReCoNNode):
         """Add an action hypothesis to this sequence."""
         self.action_hypotheses.append(hypothesis)
 
-    def process_message(self, message: ReCoNMessage) -> List[ReCoNMessage]:
-        """
-        Process messages for sequence execution.
-        """
-        responses = []
-
-        if message.type == MessageType.REQUEST:
-            # Start executing the sequence
-            self.state = ReCoNState.REQUESTED
-            self.current_step = 0
-
-            if self.action_hypotheses:
-                # Request first action in sequence 
-                first_hypothesis = self.action_hypotheses[0]
-                responses.append(ReCoNMessage(MessageType.REQUEST, self.id, first_hypothesis.id, "sub"))
-
-        elif message.type == MessageType.CONFIRM:
-            # Current step succeeded, move to next
-            self.current_step += 1
-
-            if self.current_step >= len(self.action_hypotheses):
-                # Sequence completed successfully
-                self.state = ReCoNState.CONFIRMED
-                self.completed_successfully = True
-            else:
-                # Request next step 
-                next_hypothesis = self.action_hypotheses[self.current_step]
-                responses.append(ReCoNMessage(MessageType.REQUEST, self.id, next_hypothesis.id, "sub"))
-
-        elif message.type == MessageType.FAIL:
-            # Sequence failed
-            self.state = ReCoNState.FAILED
-
-        return responses
+    # No custom message handling; rely on engine FSM + typed links
 
 
 class HypothesisManager:
@@ -166,13 +96,21 @@ class HypothesisManager:
         self.sequence_hypotheses = []
         self.hypothesis_counter = 0
 
-        # Pending measurement results per action index (True=confirm, False=fail)
-        self._pending_measurements: Dict[int, bool] = {}
+        # Availability, priors, and cooldown control (R3/R4)
+        self._available_actions: Optional[Set[int]] = None
+        self.cooldowns: Dict[int, int] = {}
+        self.cooldown_steps: int = 3
+        self.alpha_valid: Dict[int, float] = {}
+        self.alpha_value: Dict[int, float] = {}
+        self.valid_delays: Dict[int, int] = {}
+        self.max_valid_delay: int = 6
 
-        # Map action_idx to (sequence_obj, position, last_index) for quick updates
-        self._action_to_sequence: Dict[int, Tuple["SequenceHypothesis", int, int]] = {}
         # Map action_idx to terminal node id
         self._action_to_terminal: Dict[int, str] = {}
+        # Map action_idx to gate node id for por inhibition
+        self._action_to_gate: Dict[int, str] = {}
+        # Pending re-requests for FAILED actions after cooldown clears
+        self._pending_rerequest: Set[str] = set()
 
         # Build basic architecture
         self._build_architecture()
@@ -193,8 +131,83 @@ class HypothesisManager:
         except Exception:
             pass
 
+    def _iter_sub_links_to_action(self, action_node_id: str):
+        for link in self.graph.links:
+            if link.type == "sub" and link.target == action_node_id:
+                yield link
+
+    def _is_action_allowed_now(self, action_idx: int) -> bool:
+        cooldown_ok = self.cooldowns.get(action_idx, 0) <= 0
+        avail_ok = True if self._available_actions is None else (action_idx in self._available_actions)
+        valid_ok = self.valid_delays.get(action_idx, 0) <= 0
+        return cooldown_ok and avail_ok and valid_ok
+
+    def _ensure_gate_for_action(self, action_idx: int):
+        if action_idx in self._action_to_gate:
+            return
+        node = self.action_hypotheses.get(action_idx)
+        if node is None:
+            return
+        gate_id = f"gate_{node.id}"
+        # Create gate node and por link to action (inhibits requests when gate is active)
+        try:
+            self.graph.add_node(gate_id, "script")
+        except Exception:
+            pass
+        try:
+            self.graph.add_link(gate_id, node.id, "por")
+        except Exception:
+            pass
+        self._action_to_gate[action_idx] = gate_id
+
+    def _update_gate_request(self, action_idx: int):
+        self._ensure_gate_for_action(action_idx)
+        gate_id = self._action_to_gate.get(action_idx)
+        if not gate_id:
+            return
+        # If not allowed now, request the gate to send por inhibition; else stop requesting
+        if self._is_action_allowed_now(action_idx):
+            self.graph.stop_request(gate_id)
+        else:
+            self.graph.request_root(gate_id)
+
+    def _apply_valid_weight_gate(self, action_idx: int):
+        """Apply alpha_valid delay by zeroing sub link weights while delay remains."""
+        node = self.action_hypotheses.get(action_idx)
+        if node is None:
+            return
+        delay_remaining = self.valid_delays.get(action_idx, 0)
+        new_w = 0.0 if delay_remaining > 0 else 1.0
+        for link in self._iter_sub_links_to_action(node.id):
+            link.weight = new_w
+
+    def set_available_actions(self, allowed_action_indices: Optional[List[int]]):
+        """Set currently allowed actions; None or empty means all allowed."""
+        if allowed_action_indices is None:
+            self._available_actions = None
+        else:
+            self._available_actions = set(allowed_action_indices)
+        # Recompute gates for all known actions
+        for idx in list(self.action_hypotheses.keys()):
+            self._update_gate_request(idx)
+
+    def set_alpha_valid(self, mapping: Dict[int, float]) -> None:
+        """Set α_valid prior per action in [0,1]; lower values delay requests longer."""
+        for idx, val in mapping.items():
+            v = float(max(0.0, min(1.0, val)))
+            self.alpha_valid[idx] = v
+            # Map to an initial delay; if v=1, no delay; if v=0, max delay
+            self.valid_delays[idx] = max(self.valid_delays.get(idx, 0), int(round((1.0 - v) * self.max_valid_delay)))
+            self._update_gate_request(idx)
+            self._apply_valid_weight_gate(idx)
+
+    def set_alpha_value(self, mapping: Dict[int, float]) -> None:
+        """Set α_value prior per action (higher means earlier ordering in alternatives)."""
+        for idx, val in mapping.items():
+            self.alpha_value[idx] = float(val)
+
     def create_action_hypothesis(self, action_idx: int, predicted_prob: float,
-                                 context_frame: np.ndarray) -> ActionHypothesis:
+                                 context_frame: Optional[np.ndarray]) -> ActionHypothesis:
         """
         Create a new action hypothesis and its terminal measurement child.
         """
@@ -202,7 +215,8 @@ class HypothesisManager:
         node_id = f"action_hyp_{self.hypothesis_counter}"
 
         hypothesis = ActionHypothesis(node_id, action_idx, predicted_prob)
-        hypothesis.context_frame = context_frame.copy()
+        if context_frame is not None:
+            hypothesis.context_frame = context_frame.copy()
 
         # Add to graph
         self.graph.add_node(hypothesis)
@@ -225,6 +239,11 @@ class HypothesisManager:
 
         # Map action to terminal id
         self._action_to_terminal[action_idx] = term_id
+
+        # Ensure and apply gating on creation
+        self._ensure_gate_for_action(action_idx)
+        self._update_gate_request(action_idx)
+        self._apply_valid_weight_gate(action_idx)
 
         return hypothesis
 
@@ -250,7 +269,18 @@ class HypothesisManager:
         except Exception:
             pass
 
-        # Wire por/ret chain across steps
+        # Connect sequence parent to each action hypothesis via sub/sur
+        for act_h in hypothesis.action_hypotheses:
+            try:
+                self.graph.add_link(node_id, act_h.id, "sub")
+            except Exception:
+                pass
+            # Ensure and apply gating for each child
+            self._ensure_gate_for_action(act_h.action_idx)
+            self._update_gate_request(act_h.action_idx)
+            self._apply_valid_weight_gate(act_h.action_idx)
+
+        # Wire por/ret chain across steps (ordering + last-confirm via ret inhibition)
         for i in range(len(hypothesis.action_hypotheses) - 1):
             prev_id = hypothesis.action_hypotheses[i].id
             next_id = hypothesis.action_hypotheses[i + 1].id
@@ -260,16 +290,57 @@ class HypothesisManager:
             except Exception:
                 pass
 
-        # Track mapping from action indices to this sequence
-        last_index = len(hypothesis.action_hypotheses) - 1
-        for pos, act_h in enumerate(hypothesis.action_hypotheses):
-            for idx, ref in self.action_hypotheses.items():
-                if ref.id == act_h.id:
-                    self._action_to_sequence[idx] = (hypothesis, pos, last_index)
-                    break
-
+        # Track mapping from action indices to this sequence (optional, legacy)
         self.sequence_hypotheses.append(hypothesis)
         return hypothesis
+
+    def create_alternatives_hypothesis(self, action_indices: List[int]) -> str:
+        """Create a parent node that requests alternative actions in parallel (disjunction)."""
+        self.hypothesis_counter += 1
+        node_id = f"alt_hyp_{self.hypothesis_counter}"
+        self.graph.add_node(node_id, "script")
+        try:
+            self.graph.add_link("hypothesis_root", node_id, "sub")
+        except Exception:
+            pass
+
+        children = []
+        for idx in action_indices:
+            if idx not in self.action_hypotheses:
+                ah = self.create_action_hypothesis(idx, 0.5, np.zeros((64, 64)))
+            else:
+                ah = self.action_hypotheses[idx]
+            children.append(ah)
+            try:
+                self.graph.add_link(node_id, ah.id, "sub")
+            except Exception:
+                pass
+            self._ensure_gate_for_action(ah.action_idx)
+            self._update_gate_request(ah.action_idx)
+
+        # Apply value-based ordering: higher α_value should go first → por from higher to lower
+        # Add por ordering only when strictly higher alpha_value
+        scored = sorted(children, key=lambda n: self.alpha_value.get(self._find_action_idx_by_id(n.id), 0.0), reverse=True)
+        for i in range(len(scored) - 1):
+            for j in range(i + 1, len(scored)):
+                idx_hi = self._find_action_idx_by_id(scored[i].id)
+                idx_lo = self._find_action_idx_by_id(scored[j].id)
+                if idx_hi is None or idx_lo is None:
+                    continue
+                val_hi = self.alpha_value.get(idx_hi, 0.0)
+                val_lo = self.alpha_value.get(idx_lo, 0.0)
+                if val_hi > val_lo:
+                    try:
+                        self.graph.add_link(scored[i].id, scored[j].id, "por")
+                    except Exception:
+                        pass
+        return node_id
+
+    def _find_action_idx_by_id(self, node_id: str) -> Optional[int]:
+        for idx, node in self.action_hypotheses.items():
+            if node.id == node_id:
+                return idx
+        return None
 
     def request_hypothesis_test(self, hypothesis_id: str):
         if hypothesis_id in self.graph.nodes:
@@ -282,10 +353,56 @@ class HypothesisManager:
         node = self.graph.nodes.get(term_id)
         if isinstance(node, TerminalMeasurementNode):
             node.set_measurement(bool(changed))
+        # If failed, start cooldown; if succeeded, clear cooldown
+        if changed:
+            self.cooldowns[action_idx] = 0
+        else:
+            self.cooldowns[action_idx] = max(self.cooldowns.get(action_idx, 0), self.cooldown_steps)
+        # Update por inhibition gate immediately
+        self._update_gate_request(action_idx)
 
     def propagate_step(self):
         """Propagate one step in the ReCoN graph (terminals will emit sur when requested)."""
+        # Decay cooldowns and update gates
+        if self.cooldowns:
+            to_update: List[int] = []
+            just_cleared: List[int] = []
+            for idx, remaining in list(self.cooldowns.items()):
+                if remaining > 0:
+                    before = remaining
+                    self.cooldowns[idx] = remaining - 1
+                    to_update.append(idx)
+                    if before > 0 and self.cooldowns[idx] == 0:
+                        just_cleared.append(idx)
+            for idx in to_update:
+                self._update_gate_request(idx)
+            # For actions that just cleared cooldown: if still requested and FAILED, nudge by stop-request now and re-request after this step
+            for idx in just_cleared:
+                node = self.action_hypotheses.get(idx)
+                if not node:
+                    continue
+                if node.state == ReCoNState.FAILED and node.id in self.graph.requested_roots and self._is_action_allowed_now(idx):
+                    self.graph.stop_request(node.id)
+                    self._pending_rerequest.add(node.id)
+
+        # Decay alpha_valid delays
+        if self.valid_delays:
+            updated: List[int] = []
+            for idx, remaining in list(self.valid_delays.items()):
+                if remaining > 0:
+                    self.valid_delays[idx] = remaining - 1
+                    updated.append(idx)
+            for idx in updated:
+                self._update_gate_request(idx)
+                self._apply_valid_weight_gate(idx)
+
         self.graph.propagate_step()
+
+        # Apply any pending re-requests (so next step they are requested again)
+        if self._pending_rerequest:
+            for node_id in list(self._pending_rerequest):
+                self.graph.request_root(node_id)
+                self._pending_rerequest.remove(node_id)
 
 
 class TerminalMeasurementNode(ReCoNNode):
@@ -307,220 +424,3 @@ class TerminalMeasurementNode(ReCoNNode):
         if self._measurement is False:
             return 0.0
         return 0.0
-
-        # Build basic architecture
-        self._build_architecture()
-
-    def _build_architecture(self):
-        """Build ReCoN architecture for hypothesis testing."""
-        # Root hypothesis controller
-        root = self.graph.add_node("hypothesis_root", "script")
-
-        # Action executor (interface to actual game actions)
-        executor = self.graph.add_node("action_executor", "script")
-
-        # Connect root to executor
-        self.graph.add_link("hypothesis_root", "action_executor", "sub")
-
-    def create_action_hypothesis(self, action_idx: int, predicted_prob: float,
-                                context_frame: np.ndarray) -> ActionHypothesis:
-        """
-        Create a new action hypothesis.
-
-        Args:
-            action_idx: Action to test (0-5)
-            predicted_prob: CNN predicted change probability
-            context_frame: Frame context when hypothesis formed
-
-        Returns:
-            hypothesis: New ActionHypothesis node
-        """
-        self.hypothesis_counter += 1
-        node_id = f"action_hyp_{self.hypothesis_counter}"
-
-        hypothesis = ActionHypothesis(node_id, action_idx, predicted_prob)
-        hypothesis.context_frame = context_frame.copy()
-
-        # Add to graph
-        self.graph.add_node(hypothesis)
-
-        # Create terminal measurement node and connect as child
-        term_id = f"{node_id}_term"
-        terminal = TerminalMeasurementNode(term_id)
-        self.graph.add_node(terminal)
-        self.graph.add_link(node_id, term_id, "sub")
-        hypothesis.terminal_id = term_id
-
-        # Connect to executor
-        self.graph.add_link("action_executor", node_id, "sub")
-
-        # Store reference
-        self.action_hypotheses[action_idx] = hypothesis
-
-        # Map action to terminal id
-        self._action_to_terminal[action_idx] = term_id
-
-        return hypothesis
-
-    def create_sequence_hypothesis(self, action_sequence: List[int]) -> SequenceHypothesis:
-        """
-        Create a hypothesis about a sequence of actions.
-
-        Args:
-            action_sequence: List of action indices
-
-        Returns:
-            hypothesis: New SequenceHypothesis node
-        """
-        self.hypothesis_counter += 1
-        node_id = f"seq_hyp_{self.hypothesis_counter}"
-
-        hypothesis = SequenceHypothesis(node_id, action_sequence)
-
-        # Create action hypotheses for each step if they don't exist
-        for action_idx in action_sequence:
-            if action_idx not in self.action_hypotheses:
-                # Create with neutral probability since it's part of a sequence
-                action_hyp = self.create_action_hypothesis(action_idx, 0.5, np.zeros((64, 64)))
-            else:
-                action_hyp = self.action_hypotheses[action_idx]
-
-            hypothesis.add_action_hypothesis(action_hyp)
-
-        # Add to graph
-        self.graph.add_node(hypothesis)
-
-        # Connect to root
-        self.graph.add_link("hypothesis_root", node_id, "sub")
-
-        # Wire por/ret chain across steps to enforce ordering and last-confirm
-        for i in range(len(hypothesis.action_hypotheses) - 1):
-            prev_id = hypothesis.action_hypotheses[i].id
-            next_id = hypothesis.action_hypotheses[i + 1].id
-            # Successor inhibition until predecessor is true
-            self.graph.add_link(prev_id, next_id, "por")
-            # Confirmation inhibition from successors to predecessors
-            self.graph.add_link(next_id, prev_id, "ret")
-
-        # Track mapping from action indices to this sequence
-        last_index = len(hypothesis.action_hypotheses) - 1
-        for pos, act_h in enumerate(hypothesis.action_hypotheses):
-            # Find the action_idx for this hypothesis
-            for idx, ref in self.action_hypotheses.items():
-                if ref.id == act_h.id:
-                    self._action_to_sequence[idx] = (hypothesis, pos, last_index)
-                    break
-
-        # Store reference
-        self.sequence_hypotheses.append(hypothesis)
-
-        return hypothesis
-
-    def request_hypothesis_test(self, hypothesis_id: str):
-        """Request testing of a specific hypothesis."""
-        if hypothesis_id in self.graph.nodes:
-            self.graph.request_root(hypothesis_id)
-
-    def get_best_action_hypothesis(self) -> Optional[ActionHypothesis]:
-        """
-        Get the action hypothesis with highest confidence.
-
-        Returns:
-            hypothesis: Best ActionHypothesis or None
-        """
-        if not self.action_hypotheses:
-            return None
-
-        best_hypothesis = None
-        best_confidence = 0.0
-
-        for hypothesis in self.action_hypotheses.values():
-            confidence = hypothesis.get_confidence()
-            if confidence > best_confidence:
-                best_confidence = confidence
-                best_hypothesis = hypothesis
-
-        return best_hypothesis
-
-    def update_hypothesis_result(self, action_idx: int, frame_changed: bool):
-        """
-        Update hypothesis with actual result by setting the terminal measurement.
-
-        Args:
-            action_idx: Action that was executed
-            frame_changed: Whether the frame actually changed
-        """
-        if action_idx in self.action_hypotheses:
-            # Route via terminal node; apply on next propagate
-            self.set_terminal_measurement(action_idx, frame_changed)
-
-    def propagate_step(self):
-        """Perform one step of ReCoN message propagation."""
-        # First propagate messages within the graph
-        self.graph.propagate_step()
-
-        # Apply any pending measurements as bottom-up confirmation/failure
-        if self._pending_measurements:
-            to_clear = []
-            for action_idx, changed in list(self._pending_measurements.items()):
-                hypothesis = self.action_hypotheses.get(action_idx)
-                if hypothesis is None:
-                    to_clear.append(action_idx)
-                    continue
-
-                if changed:
-                    hypothesis.process_message(ReCoNMessage(MessageType.CONFIRM, "terminal", hypothesis.id, "sur"))
-                else:
-                    hypothesis.process_message(ReCoNMessage(MessageType.FAIL, "terminal", hypothesis.id, "sur"))
-                to_clear.append(action_idx)
-
-            for k in to_clear:
-                self._pending_measurements.pop(k, None)
-
-    def set_action_measurement(self, action_idx: int, frame_changed: bool) -> None:
-        """
-        Queue a measurement result for the given action hypothesis.
-        The result is applied on the next propagate_step as a sur confirm/fail.
-        """
-        self._pending_measurements[action_idx] = bool(frame_changed)
-
-        # Also update any parent sequence bookkeeping immediately
-        seq_info = self._action_to_sequence.get(action_idx)
-        if seq_info is not None:
-            sequence_obj, pos, last = seq_info
-            if frame_changed:
-                if pos < last:
-                    sequence_obj.state = ReCoNState.REQUESTED
-                    sequence_obj.current_step = pos + 1
-                else:
-                    sequence_obj.state = ReCoNState.CONFIRMED
-                    sequence_obj.completed_successfully = True
-            else:
-                sequence_obj.state = ReCoNState.FAILED
-
-    def set_terminal_measurement(self, action_idx: int, changed: bool) -> None:
-        """Set measurement on the terminal node so it can emit sur confirm/fail when requested."""
-        term_id = self._action_to_terminal.get(action_idx)
-        if not term_id:
-            return
-        node = self.graph.nodes.get(term_id)
-        if isinstance(node, TerminalMeasurementNode):
-            node.set_measurement(bool(changed))
-
-    def get_debug_info(self) -> Dict[str, Any]:
-        """Get debug information about current hypotheses."""
-        info = {
-            'num_action_hypotheses': len(self.action_hypotheses),
-            'num_sequence_hypotheses': len(self.sequence_hypotheses),
-            'action_confidences': {}
-        }
-
-        for action_idx, hypothesis in self.action_hypotheses.items():
-            info['action_confidences'][action_idx] = {
-                'confidence': hypothesis.get_confidence(),
-                'tested': hypothesis.tested,
-                'confirmations': hypothesis.confirmation_count,
-                'failures': hypothesis.failure_count
-            }
-
-        return info

@@ -25,15 +25,15 @@ def test_sequence_only_last_confirms_parent(hm):
     hm.request_hypothesis_test(seq.id)
     hm.propagate_step()
 
-    # First child confirms; sequence should advance but parent (seq) should NOT confirm yet
-    hm.set_action_measurement(0, True)
-    for _ in range(2):
+    # First child confirms via terminal; parent should not confirm yet
+    hm.set_terminal_measurement(0, True)
+    for _ in range(3):
         hm.propagate_step()
     assert seq.state != ReCoNState.CONFIRMED
 
-    # Second child confirms; now parent sequence should confirm
-    hm.set_action_measurement(1, True)
-    for _ in range(2):
+    # Second child confirms via terminal; now parent should reach TRUE/CONFIRMED
+    hm.set_terminal_measurement(1, True)
+    for _ in range(6):
         hm.propagate_step()
-    assert seq.state == ReCoNState.CONFIRMED
+    assert seq.state in (ReCoNState.TRUE, ReCoNState.CONFIRMED)
 

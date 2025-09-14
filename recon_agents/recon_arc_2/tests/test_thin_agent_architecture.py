@@ -65,7 +65,8 @@ def test_agent_delegates_action_selection_to_hypothesis_manager():
     action = agent.process_frame(frame_data)
 
     # Should return action from hypothesis manager
-    assert action == 2
+    # Hypothesis index 2 → GameAction value 3
+    assert action == 3
 
     # Should have called hypothesis manager methods
     agent.hypothesis_manager.feed_cnn_priors.assert_called_once()
@@ -132,7 +133,8 @@ def test_agent_gets_emergent_action():
     action = agent.process_frame(frame_data)
 
     # Should return the emergent action
-    assert action == 3
+    # Hypothesis index 3 → GameAction value 4
+    assert action == 4
 
 
 def test_agent_handles_score_changes():
@@ -215,7 +217,8 @@ def test_agent_propagates_until_action_emerges():
 
     # Should have propagated multiple times until action emerged
     assert agent.hypothesis_manager.propagate_step.call_count >= 3
-    assert action == 4
+    # Hypothesis index 4 → GameAction value 5
+    assert action == 5
 
 
 def test_agent_handles_no_emergent_action_gracefully():
@@ -331,7 +334,9 @@ def test_agent_is_thin_orchestrator():
 
         # 5. Get emergent action ✓
         mock_hm.get_selected_action.assert_called()
-        assert action == 1
+        # Now process_frame returns GameAction (or int in test fallback)
+        # Hypothesis index 1 → GameAction value 2 (or just 2 in fallback)
+        assert action == 2
 
         # Agent should NOT do any of the manual work it used to do:
         # - No manual hypothesis selection

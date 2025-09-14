@@ -96,8 +96,9 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
         if hasattr(frame_data, 'state'):
             state_str = str(frame_data.state)
             if state_str in ('NOT_PLAYED', 'GAME_OVER', 'WIN'):
-                action_idx = self._handle_special_state(state_str)
-                return self._convert_to_game_action(action_idx)
+                action_idx = self._handle_special_state(state_str)  # Returns hypothesis index
+                self.last_action = action_idx  # Store for learning
+                return action_idx  # Return hypothesis index for adapter conversion
 
         # Learning feedback from previous action
         if self.last_action is not None and self.previous_frame is not None:
@@ -106,8 +107,9 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
         # If no current frame, return random action
         if self.current_frame is None:
             allowed = self._get_allowed_actions(frame_data)
-            action_idx = self._get_random_action(allowed)
-            return self._convert_to_game_action(action_idx)
+            action_idx = self._get_random_action(allowed)  # Returns hypothesis index
+            self.last_action = action_idx  # Store for learning
+            return action_idx  # Return hypothesis index for adapter conversion
 
         # 2. Get CNN predictions
         change_probs = self.change_predictor.predict_change_probabilities(self.current_frame)
@@ -134,10 +136,9 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
             # Fallback if no action emerges
             selected_action = self._get_random_action(allowed_actions)
 
-        # 6. Convert to GameAction and handle coordinates
-        action = self._convert_to_game_action(selected_action)
-        self.last_action = selected_action  # Store int for internal use
-        return action
+        # 6. Store for learning and return raw action index
+        self.last_action = selected_action  # Store hypothesis index (0-5) for internal use
+        return selected_action  # Return hypothesis index for adapter conversion
 
     def _extract_frame(self, frame_data: Any) -> Optional[np.ndarray]:
         """Extract frame as numpy array."""
@@ -161,10 +162,12 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
                 )
 
     def _get_allowed_actions(self, frame_data: Any) -> List[int]:
-        """Get allowed actions from frame data."""
+        """Get allowed actions as hypothesis indices (0-5)."""
         if hasattr(frame_data, 'available_actions') and frame_data.available_actions:
-            return [action.value for action in frame_data.available_actions]
-        return list(range(6))  # Default: all actions
+            # Convert GameAction values to hypothesis indices
+            return [self._gameaction_value_to_hypothesis_index(action.value)
+                   for action in frame_data.available_actions]
+        return list(range(6))  # Default: all hypothesis indices (0-5)
 
     def _get_random_action(self, allowed_actions: List[int]) -> int:
         """Get random action from allowed actions."""
@@ -209,12 +212,33 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
         # Simple fallback - center of frame
         return 32, 32
 
-    def _convert_to_game_action(self, action_idx: int) -> Any:
-        """Convert action index to GameAction with coordinates if needed."""
-        # Convert to GameAction enum
-        action = GameAction.from_id(action_idx)
+    def _gameaction_value_to_hypothesis_index(self, gameaction_value: int) -> int:
+        """Convert GameAction value to hypothesis index (0-5)."""
+        # GameAction values: 0=RESET, 1=ACTION1, 2=ACTION2, 3=ACTION3, 4=ACTION4, 5=ACTION5, 6=ACTION6
+        # Hypothesis indices: 0=ACTION1, 1=ACTION2, 2=ACTION3, 3=ACTION4, 4=ACTION5, 5=ACTION6
+        if gameaction_value == 0:  # RESET
+            return 0  # Map to ACTION1 hypothesis
+        elif 1 <= gameaction_value <= 6:
+            return gameaction_value - 1  # ACTION1(1)→0, ACTION2(2)→1, ..., ACTION6(6)→5
+        else:
+            return 0  # Fallback to ACTION1
 
-        # If ACTION6, attach coordinates
+    def _hypothesis_index_to_gameaction_value(self, hypothesis_index: int) -> int:
+        """Convert hypothesis index (0-5) to GameAction value."""
+        # Hypothesis indices: 0=ACTION1, 1=ACTION2, 2=ACTION3, 3=ACTION4, 4=ACTION5, 5=ACTION6
+        # GameAction values: 1=ACTION1, 2=ACTION2, 3=ACTION3, 4=ACTION4, 5=ACTION5, 6=ACTION6
+        if 0 <= hypothesis_index <= 5:
+            return hypothesis_index + 1  # 0→1(ACTION1), 1→2(ACTION2), ..., 5→6(ACTION6)
+        else:
+            return 1  # Fallback to ACTION1
+
+    def _convert_to_game_action(self, hypothesis_index: int) -> Any:
+        """Convert hypothesis index to GameAction with coordinates if needed."""
+        # Convert hypothesis index to GameAction value, then to GameAction enum
+        gameaction_value = self._hypothesis_index_to_gameaction_value(hypothesis_index)
+        action = GameAction.from_id(gameaction_value)
+
+        # Only set data for ACTION6 (click actions) - matches recon_arc_1 pattern
         if hasattr(action, 'value') and action.value == 6 and self.current_frame is not None:
             x, y = self.propose_click_coordinates(self.current_frame)
             if hasattr(action, 'set_data'):
@@ -231,6 +255,18 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
     def choose_action(self, frames: List[Any], latest_frame: Any) -> Any:
         """Choose action - delegates to process_frame."""
         return self.process_frame(latest_frame)
+
+    def process_latest_frame(self, latest_frame: Any) -> None:
+        """Process frame for harness interface - stores result for later retrieval."""
+        # Process frame and store result
+        self._last_action_result = self.process_frame(latest_frame)
+
+    def get_action_from_processed_frame(self) -> Any:
+        """Get action result from previously processed frame."""
+        if hasattr(self, '_last_action_result'):
+            return self._last_action_result
+        # Fallback - return random action
+        return 0
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about agent state."""

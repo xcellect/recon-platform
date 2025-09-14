@@ -109,9 +109,10 @@ def test_agent_choose_action_returns_game_action():
     action = agent.choose_action([], frame_data)
 
     # Should return GameAction (not int)
+    # Hypothesis index 2 → GameAction value 3 (ACTION3)
     assert isinstance(action, MockGameAction)
-    assert action.value == 2
-    assert action.name == "ACTION2"
+    assert action.value == 3
+    assert action.name == "ACTION3"
 
 
 def test_agent_handles_action6_coordinates():
@@ -168,13 +169,15 @@ def test_agent_handles_special_states():
     frame_data = MockFrameData(state=MockGameState.NOT_PLAYED)
     action = agent.choose_action([], frame_data)
     assert isinstance(action, MockGameAction)
-    assert action.value == 0  # RESET
+    # Hypothesis index 0 → GameAction value 1 (ACTION1, not RESET)
+    assert action.value == 1  # ACTION1
 
     # Test GAME_OVER state
     frame_data = MockFrameData(state=MockGameState.GAME_OVER)
     action = agent.choose_action([], frame_data)
     assert isinstance(action, MockGameAction)
-    assert action.value == 0  # RESET
+    # Hypothesis index 0 → GameAction value 1 (ACTION1, not RESET)
+    assert action.value == 1  # ACTION1
 
 
 def test_agent_get_debug_info():
@@ -226,9 +229,10 @@ def test_process_frame_backward_compatibility():
     action = agent.process_frame(frame_data)
 
     # Should return GameAction
+    # Hypothesis index 3 → GameAction value 4 (ACTION4)
     assert isinstance(action, MockGameAction)
-    assert action.value == 3
-    assert action.name == "ACTION3"
+    assert action.value == 4
+    assert action.name == "ACTION4"
 
 
 def test_thin_orchestrator_pattern_preserved():
@@ -267,5 +271,6 @@ def test_thin_orchestrator_pattern_preserved():
     agent.hypothesis_manager.get_selected_action.assert_called()
 
     # Should return proper GameAction
+    # Hypothesis index 1 → GameAction value 2 (ACTION2)
     assert isinstance(action, MockGameAction)
-    assert action.value == 1
+    assert action.value == 2

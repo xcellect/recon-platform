@@ -51,15 +51,21 @@ class ReCoNArc2(Agent):
 
     def is_done(self, frames: List[FrameData], latest_frame: FrameData) -> bool:
         """
-        Check if agent is done.
-
-        Process frame and check WIN condition.
+        Check if agent is done - EXACT working pattern.
+        
+        Process frame first (sets self.guid), then check WIN condition.
         """
         self._ensure_agent()
 
         try:
             if self.recon_arc2_agent:
-                return self.recon_arc2_agent.is_done(frames, latest_frame)
+                # Process frame first (like BlindSquirrel)
+                self.recon_arc2_agent.process_latest_frame(latest_frame)
+                
+                # Check WIN condition
+                if latest_frame.state is GameState.WIN:
+                    return True
+                return False
             else:
                 return latest_frame.state == GameState.WIN
         except Exception as e:
@@ -70,20 +76,33 @@ class ReCoNArc2(Agent):
 
     def choose_action(self, frames: List[FrameData], latest_frame: FrameData) -> GameAction:
         """
-        Choose action - delegates to agent.
+        Choose action - EXACT working pattern.
+        
+        Assumes frame already processed by is_done().
         """
         self._ensure_agent()
 
+        # Handle special cases (same as BlindSquirrel)
+        if latest_frame.state in (GameState.NOT_PLAYED, GameState.GAME_OVER):
+            return GameAction.RESET
+
         try:
             if self.recon_arc2_agent:
-                # Agent now handles all logic including coordinates
-                action = self.recon_arc2_agent.choose_action(frames, latest_frame)
+                # Get action from agent (frame already processed in is_done)
+                action_result = self.recon_arc2_agent.get_action_from_processed_frame()
+                
+                # Convert result to GameAction
+                action = self._convert_action_result(action_result, latest_frame)
 
                 # Env-gated debug hook
                 try:
                     if os.getenv('RECON_ARC2_DEBUG'):
                         avail_len = len(getattr(latest_frame, 'available_actions', []) or [])
-                        print(f"recon_arc_2(adapter): action={action.name}, coords={getattr(action, 'action_data', None)}, available={avail_len}")
+                        action_data = getattr(action, 'action_data', None)
+                        coords_info = ""
+                        if action_data and hasattr(action_data, 'x') and hasattr(action_data, 'y'):
+                            coords_info = f" x={action_data.x} y={action_data.y}"
+                        print(f"recon_arc_2(adapter): action={action.name}, coords=game_id='{self.game_id}'{coords_info}, available={avail_len}")
                 except Exception:
                     pass
 
@@ -96,6 +115,60 @@ class ReCoNArc2(Agent):
             import traceback
             traceback.print_exc()
             return self._get_fallback_action(latest_frame)
+
+    def _convert_action_result(self, action_result: Any, latest_frame: FrameData) -> GameAction:
+        """Convert ReCoN action result to GameAction enum for harness."""
+        if isinstance(action_result, dict):
+            if action_result.get('type') == 'basic':
+                action_id = action_result.get('action_id', 0)
+                if action_id == 0:
+                    return GameAction.ACTION1
+                elif action_id == 1:
+                    return GameAction.ACTION2
+                elif action_id == 2:
+                    return GameAction.ACTION3
+                elif action_id == 3:
+                    return GameAction.ACTION4
+                elif action_id == 4:
+                    return GameAction.ACTION5
+                else:
+                    return GameAction.ACTION1
+            elif action_result.get('type') == 'click':
+                # For click actions, create ACTION6 with position data
+                click_action = GameAction.ACTION6
+                if 'x' in action_result and 'y' in action_result:
+                    click_action.set_data({"x": action_result['x'], "y": action_result['y']})
+                return click_action
+            else:
+                return GameAction.ACTION1
+        elif hasattr(action_result, 'value'):
+            # Already a GameAction
+            return action_result
+        elif isinstance(action_result, int):
+            # Direct action index mapping (hypothesis index to GameAction)
+            if action_result == 0:
+                return GameAction.ACTION1
+            elif action_result == 1:
+                return GameAction.ACTION2
+            elif action_result == 2:
+                return GameAction.ACTION3
+            elif action_result == 3:
+                return GameAction.ACTION4
+            elif action_result == 4:
+                return GameAction.ACTION5
+            elif action_result == 5:
+                # ACTION6 - need coordinates from agent
+                click_action = GameAction.ACTION6
+                if self.recon_arc2_agent and hasattr(self.recon_arc2_agent, 'current_frame') and self.recon_arc2_agent.current_frame is not None:
+                    x, y = self.recon_arc2_agent.propose_click_coordinates(self.recon_arc2_agent.current_frame)
+                    click_action.set_data({"x": int(x), "y": int(y)})
+                else:
+                    click_action.set_data({"x": 32, "y": 32})  # Default center
+                return click_action
+            else:
+                return GameAction.ACTION1
+        else:
+            return GameAction.ACTION1
 
     def _get_fallback_action(self, latest_frame: FrameData) -> GameAction:
         """Get fallback action when ReCoN ARC-2 agent fails."""

@@ -122,8 +122,9 @@ class ChangePredictorTrainer:
         self.optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
         self.criterion = nn.BCEWithLogitsLoss()
 
-        # Experience buffer for training
+        # Experience buffer for training (dedup by (state_hash, action_idx))
         self.experience_buffer = []
+        self._experience_index = {}
         self.max_buffer_size = 1000
 
     def add_experience(self, frame: np.ndarray, action_idx: int, changed: bool):
@@ -139,16 +140,24 @@ class ChangePredictorTrainer:
         target = np.zeros(6, dtype=np.float32)
         target[action_idx] = 1.0 if changed else 0.0
 
-        experience = {
-            'frame': frame.copy(),
-            'target': target
-        }
+        # Dedup key by state-hash and action index
+        key = (frame.tobytes(), int(action_idx))
+        experience = {'frame': frame.copy(), 'target': target}
 
-        self.experience_buffer.append(experience)
+        if key in self._experience_index:
+            idx = self._experience_index[key]
+            self.experience_buffer[idx] = experience
+        else:
+            self.experience_buffer.append(experience)
+            self._experience_index[key] = len(self.experience_buffer) - 1
 
-        # Keep buffer size manageable
-        if len(self.experience_buffer) > self.max_buffer_size:
-            self.experience_buffer.pop(0)
+            # Keep buffer size manageable
+            if len(self.experience_buffer) > self.max_buffer_size:
+                # Remove oldest entry and rebuild index (simple approach)
+                self.experience_buffer.pop(0)
+                self._experience_index.clear()
+                for i, exp in enumerate(self.experience_buffer):
+                    self._experience_index[(exp['frame'].tobytes(), int(np.argmax(exp['target'])))] = i
 
     def train_step(self, batch_size: int = 32) -> Optional[float]:
         """

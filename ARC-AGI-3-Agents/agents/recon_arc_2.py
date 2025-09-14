@@ -82,11 +82,26 @@ class ReCoNArc2(Agent):
 
         try:
             if self.recon_arc2_agent:
-                # Use active perception to choose action
-                action_idx = self.recon_arc2_agent.choose_action(frames, latest_frame)
+                # Use active perception to choose action (with coordinates if ACTION6)
+                action_idx, coords = self.recon_arc2_agent.choose_action_with_coordinates(frames, latest_frame)
 
                 # Convert to GameAction enum
-                return self._convert_action_idx(action_idx)
+                action = self._convert_action_idx(action_idx)
+
+                # Attach coordinates for ACTION6 if provided
+                if action == GameAction.ACTION6 and coords is not None:
+                    x, y = coords
+                    action.set_data({"x": int(x), "y": int(y)})
+
+                # Env-gated debug hook
+                try:
+                    if os.getenv('RECON_ARC2_DEBUG'):
+                        avail_len = len(getattr(latest_frame, 'available_actions', []) or [])
+                        print(f"recon_arc_2(adapter): action={action.name}, coords={getattr(action, 'action_data', None)}, available={avail_len}")
+                except Exception:
+                    pass
+
+                return action
             else:
                 return self._get_fallback_action(latest_frame)
 

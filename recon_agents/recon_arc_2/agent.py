@@ -48,12 +48,19 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         # Active perception parameters
         self.exploration_threshold = 0.3  # Min probability to consider action
         self.max_hypotheses_per_frame = 3  # Limit hypothesis generation
+        self.noop_suppression_steps = 3  # Suppress immediate retries after no-op
+        self._noop_cache: Dict[Tuple[bytes, int], int] = {}
 
         # Initialize parent (builds ReCoN architecture)
         super().__init__(agent_id, game_id)
 
         # Initialize neural components
         self._initialize_neural_components()
+        # Prediction cache: state_hash -> probs
+        self._pred_cache: Dict[bytes, np.ndarray] = {}
+        self._pred_cache_max = 2048
+        # Click policy params
+        self.top_k_click_regions: int = 1
 
     def _build_architecture(self):
         """Build ReCoN architecture for active perception."""
@@ -144,20 +151,44 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         Returns:
             action: Action index to execute
         """
-        # Determine allowed actions from the harness (exclude ACTION6 until coords supported)
+        # Determine allowed actions from the harness (now including ACTION6 when available)
         allowed_indices = self._allowed_action_indices(frame_data)
+
+        # If only clicks are allowed, choose ACTION6 immediately (coordinates handled later)
+        if allowed_indices == [5]:
+            return 5
 
         if self.current_frame is None:
             return self._get_random_action(allowed_indices)
 
-        # 1. Use CNN to predict which actions might cause changes
-        change_probs = self.change_predictor.predict_change_probabilities(self.current_frame)
+        # 1. Use CNN to predict which actions might cause changes (with caching)
+        fh = self._frame_hash(self.current_frame)
+        if fh in self._pred_cache:
+            change_probs = self._pred_cache[fh]
+        else:
+            change_probs = self.change_predictor.predict_change_probabilities(self.current_frame)
+            if len(self._pred_cache) >= self._pred_cache_max:
+                # Drop an arbitrary item (could use LRU; keep simple for now)
+                self._pred_cache.pop(next(iter(self._pred_cache)))
+            self._pred_cache[fh] = change_probs
 
         # 2. Generate hypotheses for promising actions (only allowed)
         self._generate_action_hypotheses(change_probs, allowed_indices)
 
-        # 3. Select best hypothesis to test
+        # 3. Select best hypothesis to test (respect no-op suppression)
         best_hypothesis = self.hypothesis_manager.get_best_action_hypothesis()
+        if best_hypothesis is not None:
+            if not self._action_allowed_by_noop_cache(self.current_frame, best_hypothesis.action_idx):
+                # Pick next best allowed action
+                candidates = sorted(range(6), key=lambda i: change_probs[i], reverse=True)
+                for idx in candidates:
+                    if idx in allowed_indices and self._action_allowed_by_noop_cache(self.current_frame, idx):
+                        best_hypothesis = self.hypothesis_manager.action_hypotheses.get(idx)
+                        if best_hypothesis is None:
+                            # Create if missing (neutral prob)
+                            self.hypothesis_manager.create_action_hypothesis(idx, float(change_probs[idx]), self.current_frame)
+                            best_hypothesis = self.hypothesis_manager.action_hypotheses.get(idx)
+                        break
 
         if best_hypothesis is None:
             return self._get_random_action(allowed_indices)
@@ -176,6 +207,64 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         # Return the action to test
         return best_hypothesis.action_idx
 
+    def propose_click_coordinates(self, frame: np.ndarray) -> Tuple[int, int]:
+        """
+        Propose click coordinates using a simple largest-region centroid heuristic.
+        Treat contiguous same-value cells as regions; return the centroid of the largest.
+        """
+        try:
+            import collections
+            h, w = frame.shape
+            visited = [[False] * w for _ in range(h)]
+            regions: List[Tuple[int, int, int]] = []  # (area, cx, cy)
+
+            # Identify background (most frequent value) and ignore it for region candidates
+            try:
+                vals, counts = np.unique(frame, return_counts=True)
+                bg_val = int(vals[np.argmax(counts)])
+            except Exception:
+                bg_val = 0
+
+            for sy in range(h):
+                for sx in range(w):
+                    if visited[sy][sx]:
+                        continue
+                    if int(frame[sy][sx]) == bg_val:
+                        continue
+                    val = frame[sy][sx]
+                    q = collections.deque([(sx, sy)])
+                    visited[sy][sx] = True
+                    area = 0
+                    sum_x = 0
+                    sum_y = 0
+                    while q:
+                        x, y = q.popleft()
+                        area += 1
+                        sum_x += x
+                        sum_y += y
+                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            nx = x + dx
+                            ny = y + dy
+                            if 0 <= nx < w and 0 <= ny < h and not visited[ny][nx] and frame[ny][nx] == val:
+                                visited[ny][nx] = True
+                                q.append((nx, ny))
+                    cx = int(round(sum_x / max(area, 1)))
+                    cy = int(round(sum_y / max(area, 1)))
+                    regions.append((area, cx, cy))
+
+            if not regions:
+                return 32, 32
+
+            # Sort by area descending and select top-K
+            regions.sort(key=lambda t: t[0], reverse=True)
+            k = max(1, int(self.top_k_click_regions))
+            topk = regions[:k]
+            # Pick first (largest) deterministically for tests; can randomize weighted by area later
+            _, cx, cy = topk[0]
+            return cx, cy
+        except Exception:
+            return 32, 32
+
     def _process_action_feedback(self):
         """
         Process feedback from the last action to enable learning.
@@ -192,6 +281,9 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
 
             # Update hypothesis with result
             self.hypothesis_manager.update_hypothesis_result(self.last_action, frame_changed)
+
+            # Update no-op cache suppression for unchanged frames
+            self._update_noop_cache(self.previous_frame, self.last_action, frame_changed)
 
             # Add experience for neural network training
             self.trainer.add_experience(self.previous_frame, self.last_action, frame_changed)
@@ -217,6 +309,35 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
 
         self.waiting_for_result = False
 
+    def _frame_hash(self, frame: np.ndarray) -> bytes:
+        try:
+            return frame.tobytes()
+        except Exception:
+            return bytes()
+
+    def _action_allowed_by_noop_cache(self, frame: np.ndarray, action_idx: int) -> bool:
+        key = (self._frame_hash(frame), int(action_idx))
+        steps_left = self._noop_cache.get(key, 0)
+        return steps_left <= 0
+
+    def _decay_noop_cache(self) -> None:
+        if not self._noop_cache:
+            return
+        for k in list(self._noop_cache.keys()):
+            self._noop_cache[k] -= 1
+            if self._noop_cache[k] <= 0:
+                self._noop_cache.pop(k, None)
+
+    def _update_noop_cache(self, frame: Optional[np.ndarray], action_idx: Optional[int], changed: bool) -> None:
+        if frame is None or action_idx is None:
+            return
+        # Decay previous entries
+        self._decay_noop_cache()
+        # Suppress only when no change
+        if not changed:
+            key = (self._frame_hash(frame), int(action_idx))
+            self._noop_cache[key] = self.noop_suppression_steps
+
     def _generate_action_hypotheses(self, change_probs: np.ndarray, allowed_indices: List[int]):
         """
         Generate hypotheses for actions with high change probability.
@@ -230,7 +351,7 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         hypotheses_created = 0
 
         for action_idx in sorted_actions:
-            # Only consider allowed simple actions (0..4). ACTION6 (5) is excluded here.
+            # Only consider allowed actions (including ACTION6/idx 5 when available)
             if action_idx not in allowed_indices:
                 continue
             prob = change_probs[action_idx]
@@ -303,8 +424,8 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         """
         Compute allowed action indices based on latest_frame.available_actions.
         - Map ACTION1..ACTION6 to indices 0..5.
-        - Suppress ACTION6 (index 5) until coordinate policy is implemented.
-        - If unavailable, default to all simple actions [0..4].
+        - Include ACTION6 (index 5) if available; coordinates are handled by adapter later.
+        - If list absent/empty, default to all simple actions [0..4].
         """
         try:
             actions = getattr(frame_data, 'available_actions', None)
@@ -315,7 +436,7 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
                     val = getattr(a, 'value', None)
                     if isinstance(val, int):
                         idx = val - 1  # ACTION1..6 -> 0..5
-                        if 0 <= idx <= 4:  # exclude ACTION6 (idx 5)
+                        if 0 <= idx <= 5:
                             if idx not in allowed:
                                 allowed.append(idx)
             if not allowed:
@@ -358,6 +479,23 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         # The real update would happen in the game loop
 
         return action_idx
+
+    def choose_action_with_coordinates(self, frames: List[Any], latest_frame: Any) -> Tuple[int, Optional[Tuple[int, int]]]:
+        """
+        Choose action and, if ACTION6 is selected, include proposed (x,y) coordinates.
+        """
+        action_idx = self.process_frame(latest_frame)
+        coords: Optional[Tuple[int, int]] = None
+        if action_idx == 5 and self.current_frame is not None:
+            coords = self.propose_click_coordinates(self.current_frame)
+        # Debug hook (env-gated)
+        try:
+            if os.getenv('RECON_ARC2_DEBUG'):
+                avail = getattr(latest_frame, 'available_actions', [])
+                print(f"recon_arc_2: action_idx={action_idx}, coords={coords}, available={len(avail)}")
+        except Exception:
+            pass
+        return action_idx, coords
 
     def get_debug_info(self) -> Dict[str, Any]:
         """Get debug information about agent state."""

@@ -29,10 +29,8 @@ def make_three_regions() -> np.ndarray:
     return f
 
 
-@pytest.mark.parametrize("r6_flag", ["1"])  # enable R6
 @pytest.mark.parametrize("fail_first", ["1"])  # fail top-prior region first
-def test_agent_r6_avoids_immediate_repeat(monkeypatch, r6_flag, fail_first):
-    monkeypatch.setenv("RECON_ARC2_R6", r6_flag)
+def test_agent_avoids_immediate_repeat(monkeypatch, fail_first):
     monkeypatch.setenv("RECON_ARC2_R6_FAIL_FIRST", fail_first)
 
     agent = ReCoNArc2Agent()

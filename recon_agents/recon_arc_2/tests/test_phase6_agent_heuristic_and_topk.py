@@ -47,8 +47,7 @@ def make_two_regions() -> np.ndarray:
     return f
 
 
-def test_agent_flag_off_uses_heuristic(monkeypatch):
-    monkeypatch.delenv("RECON_ARC2_R6", raising=False)
+def test_agent_uses_recon_regions_by_default():
     agent = ReCoNArc2Agent()
     agent.top_k_click_regions = 2
     frame = make_two_regions()
@@ -57,8 +56,7 @@ def test_agent_flag_off_uses_heuristic(monkeypatch):
     assert coords == expected
 
 
-def test_agent_r6_topk_prefers_highest_prior(monkeypatch):
-    monkeypatch.setenv("RECON_ARC2_R6", "1")
+def test_agent_topk_prefers_highest_prior():
     agent = ReCoNArc2Agent()
     agent.top_k_click_regions = 3
     frame = make_three_regions()

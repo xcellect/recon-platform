@@ -212,13 +212,11 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
 
     def propose_click_coordinates(self, frame: np.ndarray) -> Tuple[int, int]:
         """
-        Propose click coordinates.
-        If RECON_ARC2_R6=1, prefer ReCoN-driven region selection (stub for priors integration).
-        Otherwise, use a simple largest-region centroid heuristic.
+        Propose click coordinates using ReCoN-driven region selection.
         """
-        # Prefer ReCoN-driven region selection (R6); fallback to heuristic only on error
+        # ReCoN-driven region selection; fallback only on error
         try:
-            if self.hypothesis_manager is not None and os.getenv('RECON_ARC2_R6', '1') == '1':
+            if self.hypothesis_manager is not None:
                 regions = self._find_regions_nonbg(frame)
                 if not regions:
                     return 32, 32
@@ -276,28 +274,17 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
                 self._r6_last_centroid = (cx, cy)
                 return cx, cy
         except Exception:
-            pass
-        try:
-            regions = self._find_regions_nonbg(frame)
-            if not regions:
-                return 32, 32
-            # Sort by area descending and select top-K (break ties by x)
-            regions.sort(key=lambda t: (t[0], t[1]), reverse=True)
-            k = max(1, int(self.top_k_click_regions))
-            topk = regions[:k]
-            # If ACTION6 is available alongside simple actions, prefer right half for this test
-            try:
-                if topk and topk[0][1] < 16 and any(val >= 16 for _, val, _ in topk):
-                    # pick the rightmost among topk
-                    rightmost = max(topk, key=lambda t: t[1])
-                    _, cx, cy = rightmost
-                else:
-                    _, cx, cy = topk[0]
-            except Exception:
-                _, cx, cy = topk[0]
-            return cx, cy
-        except Exception:
             return 32, 32
+
+        # Fallback when ReCoN graph is unavailable or selection path didn't execute
+        regions = self._find_regions_nonbg(frame)
+        if not regions:
+            return 32, 32
+        regions.sort(key=lambda t: (t[0], t[1]), reverse=True)
+        k = max(1, int(self.top_k_click_regions))
+        topk = regions[:k]
+        _, cx, cy = topk[0]
+        return cx, cy
 
     def _find_regions(self, frame: np.ndarray) -> List[Tuple[int, int, int]]:
         """Identify contiguous regions (all values) and return list of (area, cx, cy)."""

@@ -37,17 +37,14 @@ def centroid_of(mask_val: int, frame: np.ndarray) -> tuple:
     return (cx, cy)
 
 
-@pytest.mark.parametrize("r6_flag", ["1"])  # ensure R6 path is enabled
-def test_agent_proposes_higher_prior_region_coordinates(monkeypatch, r6_flag):
-    monkeypatch.setenv("RECON_ARC2_R6", r6_flag)
+def test_agent_proposes_higher_prior_region_coordinates():
     agent = ReCoNArc2Agent()
     agent.top_k_click_regions = 2
 
     frame = make_frame_with_two_regions()
     expected_cx, expected_cy = centroid_of(2, frame)
 
-    # Compose a dummy frame wrapper
-    df = DummyFrame(frame=frame, available_actions=[type("A", (), {"value": 6})()])
+    # Compose a dummy frame wrapper (not required for direct coordinate proposal)
 
     coords = agent.propose_click_coordinates(frame)
 

@@ -27,18 +27,12 @@ def make_typical_frame() -> np.ndarray:
     return f
 
 
-def test_r6_on_off_same_coordinates(monkeypatch):
-    # R6 off
-    monkeypatch.delenv("RECON_ARC2_R6", raising=False)
-    agent_off = ReCoNArc2Agent()
-    agent_off.top_k_click_regions = 3
+def test_recon_path_is_single_and_deterministic():
+    agent_a = ReCoNArc2Agent()
+    agent_b = ReCoNArc2Agent()
+    agent_a.top_k_click_regions = 3
+    agent_b.top_k_click_regions = 3
     frame = make_typical_frame()
-    expected = agent_off.propose_click_coordinates(frame)
-
-    # R6 on
-    monkeypatch.setenv("RECON_ARC2_R6", "1")
-    agent_on = ReCoNArc2Agent()
-    agent_on.top_k_click_regions = 3
-    got = agent_on.propose_click_coordinates(frame)
-
+    expected = agent_a.propose_click_coordinates(frame)
+    got = agent_b.propose_click_coordinates(frame)
     assert got == expected

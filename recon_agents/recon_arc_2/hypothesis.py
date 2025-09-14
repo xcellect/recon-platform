@@ -240,11 +240,24 @@ class PureReCoNHypothesisManager:
         return node_id
 
     def set_available_actions(self, allowed_action_indices: Optional[List[int]]):
-        """Set available actions filter."""
+        """Set available actions filter by modulating link weights."""
         if allowed_action_indices is None:
             self._available_actions = None
+            # Reset all sub link weights to allow all actions
+            for hypothesis in self.action_hypotheses.values():
+                for link in self.graph.links:
+                    if (link.target == hypothesis.id and link.type == "sub" and
+                        link.source == "hypothesis_root"):
+                        link.weight = 1.0
         else:
             self._available_actions = set(allowed_action_indices)
+            # Set very low weights for unavailable actions, normal weights for available
+            for action_idx, hypothesis in self.action_hypotheses.items():
+                weight = 1.0 if action_idx in allowed_action_indices else 0.001
+                for link in self.graph.links:
+                    if (link.target == hypothesis.id and link.type == "sub" and
+                        link.source == "hypothesis_root"):
+                        link.weight = weight
 
     def set_alpha_valid(self, mapping: Dict[int, float]) -> None:
         """Set α_valid priors - affects sub link weights for request delay."""
@@ -325,6 +338,94 @@ class PureReCoNHypothesisManager:
     def update_hypothesis_result(self, action_idx: int, frame_changed: bool) -> None:
         """Update hypothesis result via terminal measurement."""
         self.set_terminal_measurement(action_idx, bool(frame_changed))
+
+    def get_selected_action(self) -> Optional[int]:
+        """
+        Return action index that emerged as most advanced through ReCoN message passing.
+
+        Returns action with highest state priority. In case of ties, returns action
+        with highest confidence. Respects availability constraints.
+        """
+        if not self.action_hypotheses:
+            return None
+
+        # Define state priorities (higher = more advanced)
+        state_priority = {
+            ReCoNState.CONFIRMED: 7,
+            ReCoNState.TRUE: 6,
+            ReCoNState.WAITING: 5,
+            ReCoNState.ACTIVE: 4,
+            ReCoNState.REQUESTED: 3,
+            ReCoNState.SUPPRESSED: 2,
+            ReCoNState.FAILED: 1,
+            ReCoNState.INACTIVE: 0
+        }
+
+        best_action = None
+        best_priority = -1
+        best_confidence = -1.0
+
+        for action_idx, hypothesis in self.action_hypotheses.items():
+            # Skip if action is not available
+            if (self._available_actions is not None and
+                action_idx not in self._available_actions):
+                continue
+
+            priority = state_priority.get(hypothesis.state, 0)
+            confidence = hypothesis.get_confidence()
+
+            # Select if higher priority, or same priority but higher confidence
+            if (priority > best_priority or
+                (priority == best_priority and confidence > best_confidence)):
+                best_priority = priority
+                best_confidence = confidence
+                best_action = action_idx
+
+        return best_action
+
+    def reset_for_new_level(self):
+        """
+        Reset hypothesis manager for new level (when score changes).
+
+        Clears all hypotheses and state while preserving the root node.
+        """
+        # Clear all action hypotheses
+        self.action_hypotheses.clear()
+        self.sequence_hypotheses.clear()
+
+        # Clear CNN priors
+        self.alpha_valid.clear()
+        self.alpha_value.clear()
+
+        # Clear terminal mapping
+        self._action_to_terminal.clear()
+
+        # Reset counter
+        self.hypothesis_counter = 0
+
+        # Clear requested roots
+        self.graph.requested_roots.clear()
+
+        # Clear message queue
+        self.graph.message_queue.clear()
+
+        # Clear all nodes except hypothesis_root
+        nodes_to_remove = [node_id for node_id in self.graph.nodes.keys()
+                          if node_id != "hypothesis_root"]
+
+        for node_id in nodes_to_remove:
+            if node_id in self.graph.nodes:
+                del self.graph.nodes[node_id]
+
+        # Clear all links
+        self.graph.links.clear()
+
+        # Clear NetworkX graph and rebuild with just root
+        self.graph.graph.clear()
+        self.graph.graph.add_node("hypothesis_root")
+
+        # Reset step count
+        self.graph.step_count = 0
 
 
 class TerminalMeasurementNode(ReCoNNode):

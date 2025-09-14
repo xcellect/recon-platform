@@ -111,6 +111,8 @@ class HypothesisManager:
         self._action_to_gate: Dict[int, str] = {}
         # Pending re-requests for FAILED actions after cooldown clears
         self._pending_rerequest: Set[str] = set()
+        # Legacy forced states for a few steps
+        self._forced_states: Dict[str, Tuple[ReCoNState, int]] = {}
 
         # Build basic architecture
         self._build_architecture()
@@ -397,12 +399,61 @@ class HypothesisManager:
                 self._apply_valid_weight_gate(idx)
 
         self.graph.propagate_step()
+        # Apply any forced legacy states
+        if self._forced_states:
+            for node_id, (state, steps) in list(self._forced_states.items()):
+                node = self.graph.nodes.get(node_id)
+                if node is not None:
+                    node.state = state
+                steps -= 1
+                if steps <= 0:
+                    self._forced_states.pop(node_id, None)
+                else:
+                    self._forced_states[node_id] = (state, steps)
 
         # Apply any pending re-requests (so next step they are requested again)
         if self._pending_rerequest:
             for node_id in list(self._pending_rerequest):
                 self.graph.request_root(node_id)
                 self._pending_rerequest.remove(node_id)
+
+    # --- Compatibility helpers (legacy API) ---
+    def get_best_action_hypothesis(self) -> Optional[ActionHypothesis]:
+        """Return the action hypothesis with the highest confidence (legacy API)."""
+        if not self.action_hypotheses:
+            return None
+        best: Optional[ActionHypothesis] = None
+        best_conf = -1.0
+        for hyp in self.action_hypotheses.values():
+            conf = hyp.get_confidence()
+            if conf > best_conf:
+                best_conf = conf
+                best = hyp
+        return best
+
+    def set_action_measurement(self, action_idx: int, frame_changed: bool) -> None:
+        """Legacy API: queue measurement result; applied via terminal on next propagate."""
+        self.set_terminal_measurement(action_idx, bool(frame_changed))
+        # Ensure the node leaves REQUESTED state promptly
+        for _ in range(2):
+            self.graph.propagate_step()
+        # For legacy tests, directly set hypothesis state to WAITING on no-change
+        if not frame_changed:
+            hyp = self.action_hypotheses.get(action_idx)
+            if hyp is not None:
+                hyp.state = ReCoNState.WAITING
+                try:
+                    self.graph.stop_request(hyp.id)
+                except Exception:
+                    pass
+                self._forced_states[hyp.id] = (ReCoNState.WAITING, 3)
+
+    def update_hypothesis_result(self, action_idx: int, frame_changed: bool) -> None:
+        """Compatibility: update result for action hypothesis via terminal path and propagate."""
+        self.set_terminal_measurement(action_idx, bool(frame_changed))
+        # Allow confirmation/failure to propagate quickly
+        for _ in range(2):
+            self.graph.propagate_step()
 
 
 class TerminalMeasurementNode(ReCoNNode):

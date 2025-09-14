@@ -19,10 +19,22 @@ from typing import Any, Dict, List, Optional, Tuple
 
 # Add paths for imports
 sys.path.insert(0, '/workspace/recon-platform')
+sys.path.insert(0, '/workspace/recon-platform/ARC-AGI-3-Agents')
 
 from recon_agents.base_agent import ReCoNBaseAgent
 from .perception import ChangePredictor, ChangePredictorTrainer
 from .hypothesis import HypothesisManager
+
+# Import harness types
+try:
+    from agents.structs import GameAction
+except ImportError:
+    # Fallback if harness not available (for tests)
+    class MockGameAction:
+        @classmethod
+        def from_id(cls, action_id: int):
+            return action_id
+    GameAction = MockGameAction
 
 
 class ReCoNArc2ThinAgent(ReCoNBaseAgent):
@@ -84,7 +96,8 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
         if hasattr(frame_data, 'state'):
             state_str = str(frame_data.state)
             if state_str in ('NOT_PLAYED', 'GAME_OVER', 'WIN'):
-                return self._handle_special_state(state_str)
+                action_idx = self._handle_special_state(state_str)
+                return self._convert_to_game_action(action_idx)
 
         # Learning feedback from previous action
         if self.last_action is not None and self.previous_frame is not None:
@@ -93,7 +106,8 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
         # If no current frame, return random action
         if self.current_frame is None:
             allowed = self._get_allowed_actions(frame_data)
-            return self._get_random_action(allowed)
+            action_idx = self._get_random_action(allowed)
+            return self._convert_to_game_action(action_idx)
 
         # 2. Get CNN predictions
         change_probs = self.change_predictor.predict_change_probabilities(self.current_frame)
@@ -120,9 +134,10 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
             # Fallback if no action emerges
             selected_action = self._get_random_action(allowed_actions)
 
-        # 6. Return emergent action
-        self.last_action = selected_action
-        return selected_action
+        # 6. Convert to GameAction and handle coordinates
+        action = self._convert_to_game_action(selected_action)
+        self.last_action = selected_action  # Store int for internal use
+        return action
 
     def _extract_frame(self, frame_data: Any) -> Optional[np.ndarray]:
         """Extract frame as numpy array."""
@@ -193,6 +208,45 @@ class ReCoNArc2ThinAgent(ReCoNBaseAgent):
 
         # Simple fallback - center of frame
         return 32, 32
+
+    def _convert_to_game_action(self, action_idx: int) -> Any:
+        """Convert action index to GameAction with coordinates if needed."""
+        # Convert to GameAction enum
+        action = GameAction.from_id(action_idx)
+
+        # If ACTION6, attach coordinates
+        if hasattr(action, 'value') and action.value == 6 and self.current_frame is not None:
+            x, y = self.propose_click_coordinates(self.current_frame)
+            if hasattr(action, 'set_data'):
+                action.set_data({"x": int(x), "y": int(y)})
+
+        return action
+
+    def is_done(self, frames: List[Any], latest_frame: Any) -> bool:
+        """Check if agent is done (WIN state)."""
+        if hasattr(latest_frame, 'state'):
+            return str(latest_frame.state) == 'WIN'
+        return False
+
+    def choose_action(self, frames: List[Any], latest_frame: Any) -> Any:
+        """Choose action - delegates to process_frame."""
+        return self.process_frame(latest_frame)
+
+    def get_debug_info(self) -> Dict[str, Any]:
+        """Get debug information about agent state."""
+        info = {
+            'agent_type': 'ReCoN ARC-2 Thin',
+            'game_id': self.game_id,
+            'score': self.score,
+            'has_current_frame': self.current_frame is not None,
+            'hypothesis_count': len(self.hypothesis_manager.action_hypotheses) if self.hypothesis_manager else 0
+        }
+
+        # Add hypothesis manager debug info if available
+        if self.hypothesis_manager and hasattr(self.hypothesis_manager, 'get_debug_info'):
+            info.update(self.hypothesis_manager.get_debug_info())
+
+        return info
 
 
 # Compatibility alias

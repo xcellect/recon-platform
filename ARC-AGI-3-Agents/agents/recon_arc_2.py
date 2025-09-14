@@ -70,28 +70,14 @@ class ReCoNArc2(Agent):
 
     def choose_action(self, frames: List[FrameData], latest_frame: FrameData) -> GameAction:
         """
-        Choose action using active perception.
-
-        Uses hypothesis testing to select productive actions.
+        Choose action - delegates to agent.
         """
         self._ensure_agent()
 
-        # Handle special cases
-        if latest_frame.state in (GameState.NOT_PLAYED, GameState.GAME_OVER):
-            return GameAction.RESET
-
         try:
             if self.recon_arc2_agent:
-                # Use active perception to choose action (with coordinates if ACTION6)
-                action_idx, coords = self.recon_arc2_agent.choose_action_with_coordinates(frames, latest_frame)
-
-                # Convert to GameAction enum
-                action = self._convert_action_idx(action_idx)
-
-                # Attach coordinates for ACTION6 if provided
-                if action == GameAction.ACTION6 and coords is not None:
-                    x, y = coords
-                    action.set_data({"x": int(x), "y": int(y)})
+                # Agent now handles all logic including coordinates
+                action = self.recon_arc2_agent.choose_action(frames, latest_frame)
 
                 # Env-gated debug hook
                 try:
@@ -110,18 +96,6 @@ class ReCoNArc2(Agent):
             import traceback
             traceback.print_exc()
             return self._get_fallback_action(latest_frame)
-
-    def _convert_action_idx(self, action_idx: int) -> GameAction:
-        """Convert action index to GameAction enum."""
-        action_map = {
-            0: GameAction.ACTION1,
-            1: GameAction.ACTION2,
-            2: GameAction.ACTION3,
-            3: GameAction.ACTION4,
-            4: GameAction.ACTION5,
-            5: GameAction.ACTION6
-        }
-        return action_map.get(action_idx, GameAction.ACTION1)
 
     def _get_fallback_action(self, latest_frame: FrameData) -> GameAction:
         """Get fallback action when ReCoN ARC-2 agent fails."""

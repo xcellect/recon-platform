@@ -51,7 +51,7 @@ class ActionHypothesis(ReCoNNode):
         if message.type == MessageType.REQUEST:
             # Hypothesis is being tested
             self.state = ReCoNState.REQUESTED
-            # Send request to execute the action (hierarchical sub relationship)
+            # Send request to execute the action 
             responses.append(ReCoNMessage(MessageType.REQUEST, self.id, "action_executor", "sub"))
 
         elif message.type == MessageType.CONFIRM:
@@ -128,9 +128,9 @@ class SequenceHypothesis(ReCoNNode):
             self.current_step = 0
 
             if self.action_hypotheses:
-                # Request first action in sequence (sequential por relationship)
+                # Request first action in sequence 
                 first_hypothesis = self.action_hypotheses[0]
-                responses.append(ReCoNMessage(MessageType.REQUEST, self.id, first_hypothesis.id, "por"))
+                responses.append(ReCoNMessage(MessageType.REQUEST, self.id, first_hypothesis.id, "sub"))
 
         elif message.type == MessageType.CONFIRM:
             # Current step succeeded, move to next
@@ -141,9 +141,9 @@ class SequenceHypothesis(ReCoNNode):
                 self.state = ReCoNState.CONFIRMED
                 self.completed_successfully = True
             else:
-                # Request next step (sequential por relationship)
+                # Request next step 
                 next_hypothesis = self.action_hypotheses[self.current_step]
-                responses.append(ReCoNMessage(MessageType.REQUEST, self.id, next_hypothesis.id, "por"))
+                responses.append(ReCoNMessage(MessageType.REQUEST, self.id, next_hypothesis.id, "sub"))
 
         elif message.type == MessageType.FAIL:
             # Sequence failed
@@ -281,9 +281,9 @@ class HypothesisManager:
             hypothesis = self.action_hypotheses[action_idx]
 
             if frame_changed:
-                hypothesis.process_message(ReCoNMessage(MessageType.CONFIRM, "executor", hypothesis.id, "sur"))
+                hypothesis.process_message(ReCoNMessage(MessageType.CONFIRM, "executor", hypothesis.id, "sub"))
             else:
-                hypothesis.process_message(ReCoNMessage(MessageType.FAIL, "executor", hypothesis.id, "sur"))
+                hypothesis.process_message(ReCoNMessage(MessageType.FAIL, "executor", hypothesis.id, "sub"))
 
     def propagate_step(self):
         """Perform one step of ReCoN message propagation."""

@@ -103,7 +103,7 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
                 return self._handle_special_state(state_str)
 
         # Active perception: generate and test hypotheses
-        action = self._active_perception_step()
+        action = self._active_perception_step(frame_data)
 
         # Track this action for learning feedback
         self.last_action = action
@@ -137,27 +137,34 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
             print(f"Error extracting frame: {e}")
             return None
 
-    def _active_perception_step(self) -> int:
+    def _active_perception_step(self, frame_data: Any) -> int:
         """
         Core active perception loop.
 
         Returns:
             action: Action index to execute
         """
+        # Determine allowed actions from the harness (exclude ACTION6 until coords supported)
+        allowed_indices = self._allowed_action_indices(frame_data)
+
         if self.current_frame is None:
-            return self._get_random_action()
+            return self._get_random_action(allowed_indices)
 
         # 1. Use CNN to predict which actions might cause changes
         change_probs = self.change_predictor.predict_change_probabilities(self.current_frame)
 
-        # 2. Generate hypotheses for promising actions
-        self._generate_action_hypotheses(change_probs)
+        # 2. Generate hypotheses for promising actions (only allowed)
+        self._generate_action_hypotheses(change_probs, allowed_indices)
 
         # 3. Select best hypothesis to test
         best_hypothesis = self.hypothesis_manager.get_best_action_hypothesis()
 
         if best_hypothesis is None:
-            return self._get_random_action()
+            return self._get_random_action(allowed_indices)
+
+        # Ensure the selected hypothesis' action is allowed
+        if best_hypothesis.action_idx not in allowed_indices:
+            return self._get_random_action(allowed_indices)
 
         # 4. Request testing of the hypothesis
         self.hypothesis_manager.request_hypothesis_test(best_hypothesis.id)
@@ -210,7 +217,7 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
 
         self.waiting_for_result = False
 
-    def _generate_action_hypotheses(self, change_probs: np.ndarray):
+    def _generate_action_hypotheses(self, change_probs: np.ndarray, allowed_indices: List[int]):
         """
         Generate hypotheses for actions with high change probability.
 
@@ -223,6 +230,9 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         hypotheses_created = 0
 
         for action_idx in sorted_actions:
+            # Only consider allowed simple actions (0..4). ACTION6 (5) is excluded here.
+            if action_idx not in allowed_indices:
+                continue
             prob = change_probs[action_idx]
 
             # Only create hypothesis if probability is above threshold
@@ -281,11 +291,38 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
             self._reset_for_new_game()
             return 0  # ACTION1
         else:
-            return self._get_random_action()
+            return self._get_random_action([0, 1, 2, 3, 4])
 
-    def _get_random_action(self) -> int:
-        """Get a random action as fallback."""
-        return random.randint(0, 5)  # ACTION1-ACTION6
+    def _get_random_action(self, allowed_indices: List[int]) -> int:
+        """Get a random allowed action as fallback."""
+        if not allowed_indices:
+            allowed_indices = [0, 1, 2, 3, 4]
+        return random.choice(allowed_indices)
+
+    def _allowed_action_indices(self, frame_data: Any) -> List[int]:
+        """
+        Compute allowed action indices based on latest_frame.available_actions.
+        - Map ACTION1..ACTION6 to indices 0..5.
+        - Suppress ACTION6 (index 5) until coordinate policy is implemented.
+        - If unavailable, default to all simple actions [0..4].
+        """
+        try:
+            actions = getattr(frame_data, 'available_actions', None)
+            allowed: List[int] = []
+            if actions:
+                for a in actions:
+                    # GameAction has integer value IDs
+                    val = getattr(a, 'value', None)
+                    if isinstance(val, int):
+                        idx = val - 1  # ACTION1..6 -> 0..5
+                        if 0 <= idx <= 4:  # exclude ACTION6 (idx 5)
+                            if idx not in allowed:
+                                allowed.append(idx)
+            if not allowed:
+                return [0, 1, 2, 3, 4]
+            return sorted(allowed)
+        except Exception:
+            return [0, 1, 2, 3, 4]
 
     def _reset_for_new_game(self):
         """Reset state for new game while keeping learned knowledge."""

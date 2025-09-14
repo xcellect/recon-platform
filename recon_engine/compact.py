@@ -180,6 +180,9 @@ class CompactReCoNNode(ReCoNNode):
         return messages
 
 
+# Import here to avoid circular import
+from .graph import ReCoNGraph
+
 class CompactReCoNGraph(ReCoNGraph):
     """
     ReCoN Graph using compact node implementation.

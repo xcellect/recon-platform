@@ -28,7 +28,7 @@ def test_terminal_confirm_flows_via_sur(hm):
     hm.request_hypothesis_test(hyp.id)
     hm.propagate_step()
     # Set terminal measurement to confirm
-    hm.set_action_measurement(1, True)
+    hm.set_terminal_measurement(1, True)
     # Propagate to allow sur confirmation
     for _ in range(3):
         hm.propagate_step()
@@ -39,7 +39,7 @@ def test_terminal_fail_flows_via_sur(hm):
     hyp = hm.create_action_hypothesis(2, 0.9, grid(0))
     hm.request_hypothesis_test(hyp.id)
     hm.propagate_step()
-    hm.set_action_measurement(2, False)
+    hm.set_terminal_measurement(2, False)
     for _ in range(3):
         hm.propagate_step()
     assert hyp.state in (ReCoNState.FAILED, ReCoNState.WAITING)

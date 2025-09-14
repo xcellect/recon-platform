@@ -21,7 +21,7 @@ def test_confirmed_state_persists_across_absent_request_briefly(hm):
     hyp = hm.create_action_hypothesis(3, 0.9, grid(0))
     hm.request_hypothesis_test(hyp.id)
     hm.propagate_step()
-    hm.set_action_measurement(3, True)
+    hm.set_terminal_measurement(3, True)
     for _ in range(2):
         hm.propagate_step()
     assert hyp.state == ReCoNState.CONFIRMED

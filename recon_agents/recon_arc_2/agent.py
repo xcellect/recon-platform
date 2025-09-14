@@ -280,6 +280,7 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         regions = self._find_regions_nonbg(frame)
         if not regions:
             return 32, 32
+        # Sort by area desc then x desc (rightmost largest)
         regions.sort(key=lambda t: (t[0], t[1]), reverse=True)
         k = max(1, int(self.top_k_click_regions))
         topk = regions[:k]
@@ -449,6 +450,19 @@ class ReCoNArc2Agent(ReCoNBaseAgent):
         sorted_actions = np.argsort(change_probs)[::-1]  # Descending order
 
         hypotheses_created = 0
+
+        # Optionally wire NN priors into ReCoN (alpha_valid/value)
+        try:
+            if os.getenv('RECON_ARC2_PRIORS', '0') == '1' and self.hypothesis_manager is not None:
+                # Map probabilities directly to priors in [0,1]
+                valid_map = {int(idx): float(change_probs[int(idx)]) for idx in allowed_indices}
+                value_map = {int(idx): float(change_probs[int(idx)]) for idx in allowed_indices}
+                if valid_map:
+                    self.hypothesis_manager.set_alpha_valid(valid_map)
+                if value_map:
+                    self.hypothesis_manager.set_alpha_value(value_map)
+        except Exception:
+            pass
 
         for action_idx in sorted_actions:
             # Only consider allowed actions (including ACTION6/idx 5 when available)

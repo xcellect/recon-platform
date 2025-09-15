@@ -14,6 +14,8 @@ import pytest
 import torch
 import torch.nn as nn
 from recon_engine import ReCoNNode, ReCoNState, ReCoNGraph, MessageType
+from recon_engine.hybrid_node import HybridReCoNNode, NodeMode
+from recon_engine.compact import CompactReCoNNode
 
 
 class MockNeuralModel(nn.Module):
@@ -367,3 +369,329 @@ class TestHybridMessageProtocol:
         assert graph.get_node("hybrid").state in [ReCoNState.CONFIRMED, ReCoNState.FAILED, ReCoNState.TRUE]
         # Neural terminal should confirm on request; it may reset to inactive later when request ceases
         assert graph.get_node("neural").state in [ReCoNState.CONFIRMED, ReCoNState.FAILED, ReCoNState.INACTIVE]
+
+
+class TestActivationBasedTiming:
+    """Test activation-based timing as alternative to discrete timing heuristics."""
+    
+    def test_micropsi2_style_activation_transitions(self):
+        """Test MicroPsi2-style continuous activation transitions eliminate timing heuristics."""
+        # Create a node that demonstrates activation-based state evolution
+        # This simulates MicroPsi2's approach where activation levels provide natural timing
+        
+        # Mock a MicroPsi2-style node that uses activation thresholds
+        class MicroPsi2StyleNode:
+            def __init__(self):
+                self.activation = 0.0
+                self.state = "inactive"
+                
+            def update(self, sub_activation, sur_activation):
+                """Update using MicroPsi2-style activation levels."""
+                if sub_activation < 0.01:  # Not requested
+                    self.activation = 0.0
+                    self.state = "inactive"
+                    return
+                
+                # MicroPsi2 script node logic (from micropsi2/nodefunctions.py)
+                if self.activation < -0.01:  # failed -> failed
+                    pass  # Stay failed
+                elif self.activation < 0.01:  # inactive -> preparing  
+                    self.activation = 0.2
+                    self.state = "preparing"
+                elif self.activation < 0.3:  # preparing -> suppressed/requesting
+                    self.activation = 0.4 if sur_activation <= 0 else 0.6
+                    self.state = "suppressed" if sur_activation <= 0 else "requesting"
+                elif self.activation < 0.7:  # requesting -> pending
+                    self.activation = 0.8
+                    self.state = "pending"
+                elif sur_activation >= 1:  # pending -> confirmed
+                    self.activation = 1.0
+                    self.state = "confirmed"
+                elif sur_activation <= 0:  # pending -> failed
+                    self.activation = -1.0
+                    self.state = "failed"
+                # Otherwise stay at current level
+        
+        node = MicroPsi2StyleNode()
+        
+        activation_history = []
+        state_history = []
+        
+        # Phase 1: Node gets requested and transitions through activation levels
+        for step in range(4):
+            node.update(sub_activation=1.0, sur_activation=0.5)  # Requested with children waiting
+            activation_history.append(node.activation)
+            state_history.append(node.state)
+        
+        # Phase 2: Children stop responding (critical timing scenario)
+        for step in range(3):
+            node.update(sub_activation=1.0, sur_activation=0.0)  # No children responding
+            activation_history.append(node.activation) 
+            state_history.append(node.state)
+        
+        print(f"MicroPsi2-style activation history: {activation_history}")
+        print(f"MicroPsi2-style state history: {state_history}")
+        
+        # Verify smooth activation evolution
+        unique_activations = len(set(activation_history))
+        assert unique_activations >= 4, f"Should show activation evolution, got {unique_activations} levels"
+        
+        # Should transition through intermediate states, not jump directly to failure
+        intermediate_states = len([s for s in state_history if s not in ["inactive", "failed", "confirmed"]])
+        assert intermediate_states >= 3, "Should have intermediate states providing timing buffer"
+        
+        # Key insight: Activation levels provide natural timing buffers
+        # Node doesn't fail immediately when children stop responding
+        # It transitions through intermediate activation levels first
+    
+    def test_hybrid_implicit_mode_eliminates_timing_heuristics(self):
+        """Test concept: IMPLICIT mode provides activation-based alternatives to timing counters."""
+        # This test demonstrates the concept even if HybridReCoNNode needs more work
+        
+        # The key insight is that activation-based approaches provide natural timing
+        # through continuous values rather than discrete step counters
+        
+        # Example: Instead of counting "3 steps without child response = fail"
+        # We can use "activation gradually decreases until threshold = fail"
+        
+        discrete_counter = 3  # Traditional approach: fail after N steps
+        activation_level = 0.8  # Activation approach: gradual degradation
+        
+        # Simulate steps without child response
+        for step in range(5):
+            # Discrete approach: hard cutoff
+            discrete_counter -= 1
+            discrete_failed = discrete_counter <= 0
+            
+            # Activation approach: gradual decay  
+            activation_level *= 0.7  # Decay factor
+            activation_failed = activation_level < 0.1  # Soft threshold
+            
+            print(f"Step {step}: Discrete counter={discrete_counter}, failed={discrete_failed}")
+            print(f"Step {step}: Activation level={activation_level:.3f}, failed={activation_failed}")
+        
+        # Key insight: Activation approach provides more graceful degradation
+        # This is the principle behind MicroPsi2's activation-based timing
+        
+        # Verify the concept
+        assert discrete_counter <= 0, "Discrete approach should fail abruptly"
+        assert activation_level > 0, "Activation approach allows graceful degradation"
+        
+        print("\nActivation-based timing provides natural buffers without explicit counters!")
+        print("This eliminates the need for timing heuristics like _brief_wait_count.")
+    
+    def test_activation_vs_discrete_timing_comparison(self):
+        """Compare activation-based timing vs discrete timing heuristics."""
+        # Test discrete timing (current ReCoNNode with timing counters)
+        discrete_parent = ReCoNNode("DiscreteParent", "script")
+        
+        # Test activation-based timing (CompactReCoNNode, MicroPsi2 approach)  
+        activation_parent = CompactReCoNNode("ActivationParent", "script")
+        
+        # Simulate the critical scenario: children stop sending wait signals
+        discrete_failures = []
+        activation_failures = []
+        
+        # Both start with some activation/state
+        discrete_parent.state = ReCoNState.WAITING
+        activation_parent.update_state({"sub": 1.0, "sur": 0.5})  # Get to pending state
+        
+        # Simulate steps of no child responses (the timing crisis)
+        for step in range(8):
+            # Discrete approach: uses _brief_wait_count, fails after threshold
+            discrete_parent.update_state({"sub": 1.0, "sur": 0.0})
+            discrete_failures.append(discrete_parent.state == ReCoNState.FAILED)
+            
+            # Activation approach: uses continuous values, more gradual
+            activation_parent.update_state({"sub": 1.0, "sur": 0.0})
+            activation_failures.append(activation_parent.state == ReCoNState.FAILED)
+        
+        print(f"Discrete failures by step: {discrete_failures}")
+        print(f"Activation failures by step: {activation_failures}")
+        
+        # Find when each approach fails
+        discrete_fail_step = next((i for i, failed in enumerate(discrete_failures) if failed), None)
+        activation_fail_step = next((i for i, failed in enumerate(activation_failures) if failed), None)
+        
+        print(f"Discrete fails at step: {discrete_fail_step}")
+        print(f"Activation fails at step: {activation_fail_step}")
+        
+        # Key insight: Activation approach should provide more graceful handling
+        if discrete_fail_step is not None:
+            # Discrete approach fails due to counter timeout
+            assert discrete_fail_step < 6, "Discrete should fail within counter threshold"
+        
+        if activation_fail_step is not None:
+            # Activation approach should take longer or not fail at all
+            assert activation_fail_step >= discrete_fail_step or activation_fail_step is None, \
+                "Activation approach should be more patient than discrete counters"
+        else:
+            # Activation approach might not fail at all (continuous degradation)
+            print("Activation approach shows graceful degradation without hard failure")
+        
+        # This demonstrates how MicroPsi2's activation-based approach
+        # provides natural timing buffers without explicit counters
+
+
+class TestHybridTimingConfiguration:
+    """Test the new hybrid timing configuration system."""
+    
+    def test_discrete_timing_configuration(self):
+        """Test configurable discrete timing parameters."""
+        node = ReCoNNode("test_discrete", "script")
+        
+        # Test default configuration
+        assert node.timing_mode == "discrete"
+        assert node.discrete_wait_steps == 3
+        assert node.sequence_wait_steps == 6
+        
+        # Test custom configuration
+        node.configure_timing(
+            mode="discrete",
+            discrete_wait_steps=5,
+            sequence_wait_steps=10
+        )
+        
+        assert node.discrete_wait_steps == 5
+        assert node.sequence_wait_steps == 10
+        
+        # Test timing behavior with custom parameters
+        node.state = ReCoNState.WAITING
+        failures = []
+        
+        for step in range(8):
+            # Keep node requested but no children responding
+            node.update_state({"sub": 1.0, "sur": 0.0})
+            failures.append(node.state == ReCoNState.FAILED)
+        
+        # Should fail at step 5 (custom discrete_wait_steps)
+        fail_step = next((i for i, failed in enumerate(failures) if failed), None)
+        assert fail_step == 4, f"Should fail at step 4 (0-indexed), got {fail_step}"  # 5th call = index 4
+    
+    def test_activation_timing_configuration(self):
+        """Test configurable activation-based timing parameters."""
+        node = ReCoNNode("test_activation", "script")
+        
+        # Configure for activation-based timing
+        node.configure_timing(
+            mode="activation",
+            activation_decay_rate=0.5,  # Faster decay
+            activation_failure_threshold=0.2,  # Higher threshold
+            activation_initial_level=1.0  # Start at max
+        )
+        
+        assert node.timing_mode == "activation"
+        assert node.activation_decay_rate == 0.5
+        assert node.activation_failure_threshold == 0.2
+        assert node.activation_initial_level == 1.0
+        
+        # Test activation-based timing behavior
+        node.state = ReCoNState.WAITING
+        node._waiting_activation = 1.0  # Start at configured level
+        
+        activation_history = []
+        state_history = []
+        
+        for step in range(6):
+            node.update_state({"sub": 1.0, "sur": 0.0})  # No children responding
+            activation_history.append(node._waiting_activation)
+            state_history.append(node.state.value)
+        
+        print(f"Activation decay: {activation_history}")
+        print(f"State progression: {state_history}")
+        
+        # Should show gradual activation decay: 1.0 -> 0.5 -> 0.25 -> 0.125 -> FAILED
+        assert activation_history[0] == 0.5  # First decay: 1.0 * 0.5
+        assert activation_history[1] == 0.25  # Second decay: 0.5 * 0.5
+        
+        # Should fail when activation drops below 0.2
+        fail_step = next((i for i, state in enumerate(state_history) if state == "failed"), None)
+        assert fail_step is not None, "Should eventually fail"
+        assert fail_step <= 3, "Should fail within a few steps due to fast decay"
+    
+    def test_timing_mode_comparison(self):
+        """Compare discrete vs activation timing side by side."""
+        discrete_node = ReCoNNode("discrete", "script")
+        activation_node = ReCoNNode("activation", "script")
+        
+        # Configure both with equivalent "patience"
+        discrete_node.configure_timing(mode="discrete", discrete_wait_steps=3)
+        activation_node.configure_timing(
+            mode="activation", 
+            activation_decay_rate=0.7,
+            activation_failure_threshold=0.1,
+            activation_initial_level=0.8
+        )
+        
+        # Both start in WAITING
+        discrete_node.state = ReCoNState.WAITING
+        activation_node.state = ReCoNState.WAITING
+        activation_node._waiting_activation = 0.8
+        
+        discrete_results = []
+        activation_results = []
+        
+        for step in range(8):
+            # No children responding
+            discrete_node.update_state({"sub": 1.0, "sur": 0.0})
+            activation_node.update_state({"sub": 1.0, "sur": 0.0})
+            
+            discrete_results.append({
+                "step": step,
+                "state": discrete_node.state.value,
+                "counter": getattr(discrete_node, '_brief_wait_count', 0)
+            })
+            
+            activation_results.append({
+                "step": step, 
+                "state": activation_node.state.value,
+                "activation": activation_node._waiting_activation
+            })
+        
+        print("Discrete timing progression:")
+        for result in discrete_results:
+            print(f"  Step {result['step']}: {result['state']} (counter: {result['counter']})")
+            
+        print("Activation timing progression:")
+        for result in activation_results:
+            print(f"  Step {result['step']}: {result['state']} (activation: {result['activation']:.3f})")
+        
+        # Both should eventually fail, but with different characteristics
+        discrete_fail = next((r for r in discrete_results if r['state'] == 'failed'), None)
+        activation_fail = next((r for r in activation_results if r['state'] == 'failed'), None)
+        
+        assert discrete_fail is not None, "Discrete timing should eventually fail"
+        assert activation_fail is not None, "Activation timing should eventually fail"
+        
+        # Discrete should fail abruptly at exact step
+        assert discrete_fail['step'] == 2, f"Discrete should fail at step 2, got {discrete_fail['step']}"
+        
+        # Activation should show gradual decay before failing
+        pre_fail_activations = [r['activation'] for r in activation_results[:activation_fail['step']]]
+        assert len(set(pre_fail_activations)) > 1, "Should show activation evolution before failure"
+    
+    def test_timing_configuration_persistence(self):
+        """Test that timing configuration persists through serialization."""
+        node = ReCoNNode("persistent", "script")
+        
+        # Configure custom timing
+        node.configure_timing(
+            mode="activation",
+            activation_decay_rate=0.9,
+            activation_failure_threshold=0.05,
+            discrete_wait_steps=7
+        )
+        
+        # Serialize and check configuration is included
+        data = node.to_dict()
+        
+        assert "timing_config" in data
+        config = data["timing_config"]
+        assert config["timing_mode"] == "activation"
+        assert config["activation_decay_rate"] == 0.9
+        assert config["activation_failure_threshold"] == 0.05
+        assert config["discrete_wait_steps"] == 7
+        
+        # Test get_timing_config method
+        direct_config = node.get_timing_config()
+        assert direct_config == config

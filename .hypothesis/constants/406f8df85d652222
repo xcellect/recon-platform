@@ -1,0 +1,4 @@
+# file: /workspace/recon-platform/recon_engine/hybrid_node.py
+# hypothesis_version: 6.138.16
+
+[-1.0, 0.0, 1e-08, 0.5, 0.8, 1.0, 'C', 'F', 'IC', 'IR', 'R', 'W', 'activation', 'activation_dim', 'confirm', 'explicit', 'fail', 'gen', 'has_neural_model', 'hybrid', 'id', 'implicit', 'inhibit_confirm', 'inhibit_request', 'mode', 'mode_history', 'neural', 'neural_threshold', 'por', 'request', 'ret', 'script', 'state', 'sub', 'sur', 'type', 'wait']

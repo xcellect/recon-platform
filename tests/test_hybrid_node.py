@@ -224,8 +224,13 @@ class TestHybridNodeArchitecture:
         # Ensure intermediate sequence nodes have sub children per paper
         graph.add_node("TA", "terminal")
         graph.add_link("A", "TA", "sub")
-        graph.add_node("TB", "terminal")
+        graph.add_node("TB", "terminal") 
         graph.add_link("B", "TB", "sub")
+        
+        # Set terminals to confirm explicitly (no longer auto-confirm)
+        graph.get_node("T").measurement_fn = lambda env: 1.0
+        graph.get_node("TA").measurement_fn = lambda env: 1.0
+        graph.get_node("TB").measurement_fn = lambda env: 1.0
         
         graph.request_root("Parent")
         

@@ -151,6 +151,9 @@ class TestReCoNMessages:
         graph.add_link("parent", "child", "sub")
         graph.add_link("child", "terminal", "sub")
         
+        # Set terminal to confirm explicitly (neutral default now requires explicit setup)
+        terminal.measurement_fn = lambda env: 1.0
+        
         # Request parent to start execution
         graph.request_root("parent")
         
@@ -283,11 +286,15 @@ class TestMessagePropagationIntegration:
         graph.add_link("Root", "Child1", "sub")
         graph.add_link("Root", "Child2", "sub")
         
-        # Add terminals
+        # Add terminals with explicit confirmation setup
         graph.add_node("T1", "terminal")
         graph.add_node("T2", "terminal")
         graph.add_link("Child1", "T1", "sub")
         graph.add_link("Child2", "T2", "sub")
+        
+        # Set terminals to confirm explicitly (neutral default now requires explicit setup)
+        graph.get_node("T1").measurement_fn = lambda env: 1.0
+        graph.get_node("T2").measurement_fn = lambda env: 1.0
         
         graph.request_root("Root")
         

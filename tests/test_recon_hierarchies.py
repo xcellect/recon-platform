@@ -12,6 +12,15 @@ import pytest
 from recon_engine import ReCoNNode, ReCoNState, ReCoNGraph
 
 
+def setup_terminal_for_testing(graph, terminal_id, should_confirm=True):
+    """Helper function to set up terminals with explicit measurement for testing."""
+    terminal = graph.get_node(terminal_id)
+    if should_confirm:
+        terminal.measurement_fn = lambda env: 1.0  # Above threshold, will confirm
+    else:
+        terminal.measurement_fn = lambda env: 0.3  # Below threshold, will fail
+
+
 class TestReCoNHierarchies:
     """Test hierarchical execution via sub/sur links."""
     
@@ -269,6 +278,7 @@ class TestReCoNHierarchies:
         # Provide a child to Seq1 to satisfy requirement
         graph.add_node("TSeq1", "terminal")
         graph.add_link("Seq1", "TSeq1", "sub")
+        setup_terminal_for_testing(graph, "TSeq1", should_confirm=True)
         
         # Alt2 has single sequence
         graph.add_node("Seq3", "script")
@@ -278,6 +288,7 @@ class TestReCoNHierarchies:
         for seq in ["Seq2", "Seq3"]:  # Only terminals at sequence ends
             graph.add_node(f"T{seq}", "terminal")
             graph.add_link(seq, f"T{seq}", "sub")
+            setup_terminal_for_testing(graph, f"T{seq}", should_confirm=True)
         
         graph.request_root("Root")
         

@@ -494,8 +494,10 @@ class ReCoNNode:
                 output = self.neural_model(input_tensor)
                 return output.item() if hasattr(output, 'item') else output
         else:
-            # Default terminal behavior - confirm immediately
-            return 1.0
+            # Default terminal behavior - neutral measurement (paper doesn't specify default)
+            # Returns 0.5 which is below default transition_threshold (0.8), so will fail
+            # This requires explicit measurement_fn or neural model for confirmation
+            return 0.5
     
     def get_timing_config(self) -> Dict[str, Any]:
         """Get current timing configuration."""

@@ -164,10 +164,12 @@ class TestReCoNSequences:
         graph.add_link("A", "B", "por")
         graph.add_link("B", "C", "por")
         
-        # Add terminals
+        # Add terminals with explicit confirmation setup
         for node_id, terminal_id in [("A", "TA"), ("B", "TB"), ("C", "TC")]:
             graph.add_node(terminal_id, "terminal")
             graph.add_link(node_id, terminal_id, "sub")
+            # Set terminals to confirm explicitly (neutral default now requires explicit setup)
+            graph.get_node(terminal_id).measurement_fn = lambda env: 1.0
         
         graph.request_root("Parent")
         
@@ -213,6 +215,8 @@ class TestReCoNSequences:
         # Add terminal to A (succeeds) and B (fails)
         graph.add_node("TA", "terminal")
         graph.add_link("A", "TA", "sub")
+        # Set TA to confirm explicitly
+        graph.get_node("TA").measurement_fn = lambda env: 1.0  # Above threshold
         
         # Give B a failing terminal
         graph.add_node("TB", "terminal")
@@ -267,7 +271,7 @@ class TestReCoNSequences:
         graph.add_node("TSeq1", "terminal")
         graph.add_link("Seq1", "TSeq1", "sub")
         
-        # Seq2 contains C -> D  
+        # Seq2 contains C -> D
         graph.add_node("C", "script")
         graph.add_node("D", "script")
         graph.add_link("Seq2", "C", "sub")
@@ -280,6 +284,10 @@ class TestReCoNSequences:
         for node_id, terminal_id in [("B", "TB"), ("D", "TD")]:
             graph.add_node(terminal_id, "terminal")
             graph.add_link(node_id, terminal_id, "sub")
+        
+        # Set all terminals to confirm explicitly (neutral default requires explicit setup)
+        for terminal_id in ["TSeq1", "TSeq2", "TB", "TD"]:
+            graph.get_node(terminal_id).measurement_fn = lambda env: 1.0
         
         graph.request_root("Root")
         

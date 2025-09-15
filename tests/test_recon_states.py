@@ -167,11 +167,21 @@ class TestReCoNStates:
         """Terminal nodes should have different behavior than script nodes."""
         terminal = ReCoNNode("terminal", node_type="terminal")
         
-        # Terminal nodes should only have states: inactive, active, confirmed
+        # Terminal with neutral default measurement should fail (requires explicit setup)
         inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
         signals = terminal.update_state(inputs)
         
-        assert terminal.state in [ReCoNState.INACTIVE, ReCoNState.ACTIVE, ReCoNState.CONFIRMED]
+        # With default neutral measurement (0.5 < 0.8), terminal should fail
+        assert terminal.state == ReCoNState.FAILED, \
+            f"Terminal with neutral default should fail, got {terminal.state}"
+        
+        # Terminal with explicit high measurement should confirm
+        terminal.reset()
+        terminal.measurement_fn = lambda env: 0.9  # Above threshold
+        signals = terminal.update_state(inputs)
+        
+        assert terminal.state == ReCoNState.CONFIRMED, \
+            f"Terminal with high measurement should confirm, got {terminal.state}"
         
         # Terminal nodes can only be targeted by sub, source of sur
         assert "sub" not in signals  # Cannot request children

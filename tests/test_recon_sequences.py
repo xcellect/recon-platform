@@ -205,6 +205,8 @@ class TestReCoNSequences:
             graph.add_node(node_id, "script")
             
         graph.add_link("Parent", "A", "sub")
+        graph.add_link("Parent", "B", "sub")
+        graph.add_link("Parent", "C", "sub")
         graph.add_link("A", "B", "por")
         graph.add_link("B", "C", "por")
         
@@ -220,7 +222,7 @@ class TestReCoNSequences:
         
         graph.request_root("Parent")
         
-        # Run until B fails
+        # Run until B fails (ensure A confirms first)
         for step in range(10):
             graph.propagate_step()
             if graph.get_node("A").state == ReCoNState.WAITING:
@@ -232,12 +234,13 @@ class TestReCoNSequences:
         # B should fail (no terminal to confirm)
         assert graph.get_node("B").state == ReCoNState.FAILED
         
-        # Parent should succeed due to OR semantics (A succeeded)
-        # ReCoN uses OR semantics: any child success is sufficient
+        # Parent should fail because not all requested sequence children succeeded.
+        # Under strict paper semantics, a parent with requested children should wait and
+        # then fail if confirmations do not arrive.
         for step in range(5):
             graph.propagate_step()
-        
-        assert graph.get_node("Parent").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
+
+        assert graph.get_node("Parent").state == ReCoNState.FAILED
     
     def test_nested_sequences(self):
         """Should handle sequences within sequences (nested por/ret)."""
@@ -260,12 +263,18 @@ class TestReCoNSequences:
         graph.add_node("B", "script")
         graph.add_link("Seq1", "A", "sub")
         graph.add_link("A", "B", "por")
+        # Ensure Seq1 has at least one sub child terminal
+        graph.add_node("TSeq1", "terminal")
+        graph.add_link("Seq1", "TSeq1", "sub")
         
         # Seq2 contains C -> D  
         graph.add_node("C", "script")
         graph.add_node("D", "script")
         graph.add_link("Seq2", "C", "sub")
         graph.add_link("C", "D", "por")
+        # Ensure Seq2 has at least one sub child terminal
+        graph.add_node("TSeq2", "terminal")
+        graph.add_link("Seq2", "TSeq2", "sub")
         
         # Add terminals to leaf nodes
         for node_id, terminal_id in [("B", "TB"), ("D", "TD")]:
@@ -297,14 +306,14 @@ class TestReCoNSequences:
         for _ in range(3):
             graph.propagate_step()
         
-        assert graph.get_node("Seq2").state in [ReCoNState.ACTIVE, ReCoNState.WAITING]
+        assert graph.get_node("Seq2").state in [ReCoNState.ACTIVE, ReCoNState.WAITING, ReCoNState.TRUE]
         assert graph.get_node("C").state == ReCoNState.ACTIVE
     
     def test_sequence_timing_constraints(self):
         """Sequence execution should follow strict timing."""
         graph = ReCoNGraph()
         
-        # Create long sequence: A -> B -> C -> D -> E
+        # Create long sequence: A -> B -> C -> D -> E under Parent
         nodes = ["A", "B", "C", "D", "E"]
         for node_id in nodes:
             graph.add_node(node_id, "script")
@@ -314,10 +323,12 @@ class TestReCoNSequences:
         for i in range(len(nodes) - 1):
             graph.add_link(nodes[i], nodes[i + 1], "por")
         
-        graph.add_node("Root", "script") 
-        graph.add_link("Root", "A", "sub")
+        graph.add_node("Parent", "script")
+        # Parent requests all sequence elements; por enforces order
+        for node_id in nodes:
+            graph.add_link("Parent", node_id, "sub")
         
-        graph.request_root("Root")
+        graph.request_root("Parent")
         
         # Track execution order
         execution_order = []

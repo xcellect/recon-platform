@@ -119,12 +119,26 @@ class ReCoNGraph:
             if any((source, target, "por") == (s, t, lt) or (target, source, "ret") == (s, t, lt) 
                    for s, t, lt in existing_links):
                 raise ValueError(f"por/ret link pair already exists between {source} and {target}")
+            # Enforce paper rule: do not allow both por/ret and sub/sur between same node pair
+            if any(((source, target, "sub") == (s, t, lt)) or ((target, source, "sur") == (s, t, lt)) or
+                   ((target, source, "sub") == (s, t, lt)) or ((source, target, "sur") == (s, t, lt))
+                   for s, t, lt in existing_links):
+                raise ValueError(
+                    f"Cannot add {link_type} between {source} and {target}: sub/sur pair already exists for this node pair"
+                )
                 
         if link_type in ["sub", "sur"]:
             # Check for existing sub/sur pair  
             if any((source, target, "sub") == (s, t, lt) or (target, source, "sur") == (s, t, lt)
                    for s, t, lt in existing_links):
                 raise ValueError(f"sub/sur link pair already exists between {source} and {target}")
+            # Enforce paper rule: do not allow both sub/sur and por/ret between same node pair
+            if any(((source, target, "por") == (s, t, lt)) or ((target, source, "ret") == (s, t, lt)) or
+                   ((target, source, "por") == (s, t, lt)) or ((source, target, "ret") == (s, t, lt))
+                   for s, t, lt in existing_links):
+                raise ValueError(
+                    f"Cannot add {link_type} between {source} and {target}: por/ret pair already exists for this node pair"
+                )
         
         # Create primary link
         link = ReCoNLink(source, target, link_type, weight)
@@ -300,42 +314,8 @@ class ReCoNGraph:
         When a node becomes TRUE and has por successors but no sub children,
         automatically request the next node in the sequence chain.
         """
-        for node in self.nodes.values():
-            if node.state == ReCoNState.TRUE:
-                # Check if this node has por successors
-                por_links = self.get_links(source=node.id, link_type="por")
-                # Check if this node has sub children (proper hierarchy)
-                sub_links = self.get_links(source=node.id, link_type="sub")
-                
-                # Check if node only has terminal children (if any)
-                non_terminal_children = [link for link in sub_links 
-                                       if self.nodes[link.target].type != "terminal"]
-                
-                # Only do chain propagation if:
-                # 1. Node has por successors (part of a sequence)
-                # 2. Node has no non-terminal sub children (only terminals or no children)
-                if por_links and not non_terminal_children:
-                    # This is a sequence node - propagate request to successor
-                    for por_link in por_links:
-                        successor_id = por_link.target
-                        successor_node = self.nodes[successor_id]
-                        
-                        # Only request if successor is not already requested
-                        if successor_node.state == ReCoNState.INACTIVE:
-                            # Add request message for next step
-                            message = ReCoNMessage(
-                                MessageType.REQUEST,
-                                node.id,  # source is the TRUE node
-                                successor_id,
-                                "sub",  # treat as sub request for compatibility
-                                1.0
-                            )
-                            self.message_queue.append(message)
-                            
-                            # Also add this successor to requested_roots so it gets
-                            # continuous request messages
-                            if successor_id not in self.requested_roots:
-                                self.requested_roots.add(successor_id)
+        # Disabled for strict paper compliance (no automatic sequence requests)
+        return
     
     def is_completed(self) -> bool:
         """Check if all requested scripts have completed (confirmed or failed)."""

@@ -252,11 +252,18 @@ class TestMessagePropagationIntegration:
         assert graph.get_node("B").state == ReCoNState.SUPPRESSED
         assert graph.get_node("C").state == ReCoNState.SUPPRESSED
         
-        # A goes to WAITING (has no children)
+        # Per paper, script nodes must have a sub child. Provide A's child now
+        graph.add_node("TA", "terminal")
+        graph.add_link("A", "TA", "sub")
+        # Next step: A requests its child and goes to WAITING
         graph.propagate_step()
-        assert graph.get_node("A").state == ReCoNState.WAITING
-        
-        # Since A has no children, it should transition to TRUE/CONFIRMED
+        assert graph.get_node("A").state in [ReCoNState.WAITING, ReCoNState.ACTIVE]
+
+        # Confirm A's terminal to allow A -> TRUE/CONFIRMED
+        if graph.get_node("A").state == ReCoNState.WAITING:
+            graph.get_node("TA").state = ReCoNState.CONFIRMED
+        # Allow for message generation and delivery across steps
+        graph.propagate_step()
         graph.propagate_step()
         assert graph.get_node("A").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]
         

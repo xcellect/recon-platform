@@ -266,6 +266,9 @@ class TestReCoNHierarchies:
         graph.add_node("Seq2", "script")
         graph.add_link("Alt1", "Seq1", "sub")
         graph.add_link("Seq1", "Seq2", "por")
+        # Provide a child to Seq1 to satisfy requirement
+        graph.add_node("TSeq1", "terminal")
+        graph.add_link("Seq1", "TSeq1", "sub")
         
         # Alt2 has single sequence
         graph.add_node("Seq3", "script")

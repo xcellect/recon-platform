@@ -279,9 +279,8 @@ class ReCoNNode:
                 if self.has_children():
                     self.state = ReCoNState.WAITING
                 else:
-                    # Nodes without children in a sequence might need special handling
-                    # They act as placeholders in the sequence and can self-confirm
-                    self.state = ReCoNState.WAITING
+                    # Script nodes without sub children are invalid per paper; fail immediately
+                    self.state = ReCoNState.FAILED
                 
             elif old_state == ReCoNState.WAITING:
                 if child_confirmed:
@@ -316,14 +315,8 @@ class ReCoNNode:
                                 else:
                                     self.state = ReCoNState.WAITING
                         else:
-                            # Node has no children - it shouldn't have gone to WAITING
-                            # Handle based on node type and structure
-                            if self.has_por_successors():
-                                # Sequence node - self-confirm to continue sequence
-                                self.state = ReCoNState.TRUE
-                            else:
-                                # Leaf node with no terminals - fail
-                                self.state = ReCoNState.FAILED
+                            # Node has no children - invalid per paper, fail
+                            self.state = ReCoNState.FAILED
                     else:
                         # Reset counter when we receive child signals
                         if hasattr(self, '_no_children_count'):
@@ -396,24 +389,12 @@ class ReCoNNode:
         elif self.state == ReCoNState.TRUE:
             # According to Table 1: TRUE state only sends "inhibit_confirm" via ret
             messages["ret"] = "inhibit_confirm"
-            # Table 1 specifies no messages via por or sur for TRUE state
-            # However, for sequence compatibility, we may need to keep requesting children
-            # if they are also part of a sequence (have por links)
-            if self.has_children():
-                # Check if any children are part of sequences
-                messages["sub"] = "request"  # Keep requesting children
+            # No por, sub, or sur messages in TRUE state per paper
             
         elif self.state == ReCoNState.CONFIRMED:
             messages["ret"] = "inhibit_confirm"  # Still inhibit predecessors per Table 1
-            # Only send confirm if not ret inhibited (i.e., last in sequence)
-            ret_activation = inputs.get("ret", self.get_link_activation("ret"))
-            is_ret_inhibited = (isinstance(ret_activation, torch.Tensor) and ret_activation.sum() < 0) or \
-                              (isinstance(ret_activation, (int, float)) and ret_activation < 0)
-            
-            if is_ret_inhibited:
-                messages["sur"] = "wait"  # Send wait if inhibited (not last in sequence)
-            else:
-                messages["sur"] = "confirm"  # Send confirm only if last in sequence
+            # Per Table 1, CONFIRMED sends confirm via sur
+            messages["sur"] = "confirm"
             
         elif self.state == ReCoNState.FAILED:
             messages["por"] = "inhibit_request"

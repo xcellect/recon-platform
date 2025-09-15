@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 from recon_engine import ReCoNGraph, ReCoNNode, ReCoNState
 from recon_engine.compact import CompactReCoNGraph
-from .schemas import (
+from schemas import (
     NodeCreateRequest, NodeResponse, LinkCreateRequest, LinkResponse,
     NetworkCreateRequest, NetworkResponse, ExecuteRequest, ExecuteResponse,
     StateSnapshot, VisualizationResponse, ErrorResponse

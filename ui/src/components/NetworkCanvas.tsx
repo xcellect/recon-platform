@@ -1,6 +1,6 @@
 // Main React Flow canvas component for network visualization
 
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   Node,
@@ -93,15 +93,16 @@ export default function NetworkCanvas({ onNodeSelect, onEdgeSelect }: NetworkCan
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  
+  // Track if layout has been applied to prevent multiple layout passes
+  const layoutAppliedRef = useRef<string | null>(null);
+  const isLayoutingRef = useRef(false);
 
-  // Convert ReCoN network to React Flow format
-  const convertToReactFlowFormat = useCallback((network: any) => {
-    if (!network) return { nodes: [], edges: [] };
+  // Memoize React Flow nodes (separated from edges to reduce re-renders)
+  const reactFlowNodes = useMemo(() => {
+    if (!currentNetwork) return [];
 
-    // Apply auto-layout if nodes don't have positions
-    const layoutedNodes = autoLayout(network.nodes, network.links);
-
-    const reactFlowNodes: Node[] = layoutedNodes.map((node: ReCoNNode) => ({
+    return currentNetwork.nodes.map((node: ReCoNNode) => ({
       id: node.id,
       type: node.type,
       position: node.position,
@@ -111,8 +112,13 @@ export default function NetworkCanvas({ onNodeSelect, onEdgeSelect }: NetworkCan
       },
       selected: selectedNode?.id === node.id,
     }));
+  }, [currentNetwork?.nodes, selectedNode?.id]);
 
-    const reactFlowEdges: Edge[] = network.links.map((link: ReCoNLink) => ({
+  // Memoize React Flow edges (separated from nodes to reduce re-renders)
+  const reactFlowEdges = useMemo(() => {
+    if (!currentNetwork) return [];
+
+    return currentNetwork.links.map((link: ReCoNLink) => ({
       id: link.id,
       source: link.source,
       target: link.target,
@@ -124,21 +130,54 @@ export default function NetworkCanvas({ onNodeSelect, onEdgeSelect }: NetworkCan
       },
       selected: selectedLink?.id === link.id,
     }));
+  }, [currentNetwork?.links, selectedLink?.id]);
 
-    return { nodes: reactFlowNodes, edges: reactFlowEdges };
-  }, [selectedNode, selectedLink]);
-
-  // Update React Flow when network changes
+  // Apply layout only once when network changes and nodes need positioning
   useEffect(() => {
-    if (currentNetwork) {
-      const { nodes: reactFlowNodes, edges: reactFlowEdges } = convertToReactFlowFormat(currentNetwork);
-      setNodes(reactFlowNodes);
-      setEdges(reactFlowEdges);
-    } else {
-      setNodes([]);
-      setEdges([]);
+    if (!currentNetwork || isLayoutingRef.current) return;
+    
+    const networkId = currentNetwork.id;
+    const hasNodes = currentNetwork.nodes.length > 0;
+    const hasLinks = currentNetwork.links.length > 0;
+    
+    // Check if layout has already been applied for this network
+    if (layoutAppliedRef.current === networkId) return;
+    
+    // Check if nodes need positioning (all at origin)
+    const needsLayout = hasNodes && currentNetwork.nodes.every(node => 
+      node.position.x === 0 && node.position.y === 0
+    );
+    
+    if (needsLayout && hasLinks) {
+      isLayoutingRef.current = true;
+      
+      try {
+        const layoutedNodes = autoLayout(currentNetwork.nodes, currentNetwork.links);
+        
+        // Update positions in batches to avoid multiple re-renders
+        layoutedNodes.forEach(node => {
+          updateNode(node.id, { position: node.position });
+        });
+        
+        layoutAppliedRef.current = networkId;
+      } finally {
+        isLayoutingRef.current = false;
+      }
+    } else if (hasNodes && !hasLinks) {
+      // For networks without links, just mark as layout applied
+      layoutAppliedRef.current = networkId;
     }
-  }, [currentNetwork, convertToReactFlowFormat, setNodes, setEdges]);
+  }, [currentNetwork?.id, currentNetwork?.nodes.length, currentNetwork?.links.length, updateNode]);
+
+  // Update React Flow nodes when network nodes change
+  useEffect(() => {
+    setNodes(reactFlowNodes);
+  }, [reactFlowNodes, setNodes]);
+
+  // Update React Flow edges when network links change
+  useEffect(() => {
+    setEdges(reactFlowEdges);
+  }, [reactFlowEdges, setEdges]);
 
   // Handle node selection
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {

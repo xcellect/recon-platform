@@ -1,5 +1,5 @@
 // Simplified Network Canvas that actually works
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
   Node,
   Edge,
@@ -33,29 +33,37 @@ export default function SimpleNetworkCanvas({
   currentStep = 0
 }: SimpleNetworkCanvasProps) {
   const { currentNetwork, addLink, updateNode } = useNetworkStore();
+  
+  // Track if layout has been applied to prevent multiple layout passes
+  const layoutAppliedRef = useRef<string | null>(null);
+  const isLayoutingRef = useRef(false);
 
   // Get current step data for state override
   const currentStepData = executionHistory[currentStep];
 
-  // Convert ReCoN nodes to React Flow nodes
-  const reactFlowNodes: Node[] = currentNetwork?.nodes.map(node => {
-    // Use execution history state if available, otherwise use base state
-    const currentState = currentStepData?.states?.[node.id] || node.state;
+  // Memoize React Flow nodes to prevent unnecessary re-renders
+  const reactFlowNodes = useMemo(() => {
+    if (!currentNetwork?.nodes) return [];
 
-    return {
-      id: node.id,
-      type: 'reconNode',
-      position: node.position,
-      data: {
-        label: `${node.id}\n(${node.type})\n${currentState}`,
-        state: currentState,
-        nodeType: node.type
-      }
-    };
-  }) || [];
+    return currentNetwork.nodes.map(node => {
+      // Use execution history state if available, otherwise use base state
+      const currentState = currentStepData?.states?.[node.id] || node.state;
 
-  // Filter and convert ReCoN links to bidirectional React Flow edges
-  const reactFlowEdges: Edge[] = (() => {
+      return {
+        id: node.id,
+        type: 'reconNode',
+        position: node.position,
+        data: {
+          label: `${node.id}\n(${node.type})\n${currentState}`,
+          state: currentState,
+          nodeType: node.type
+        }
+      };
+    });
+  }, [currentNetwork?.nodes, currentStepData]);
+
+  // Memoize React Flow edges to prevent unnecessary re-renders
+  const reactFlowEdges = useMemo(() => {
     if (!currentNetwork?.links) return [];
 
     // Group links by their bidirectional pairs
@@ -63,7 +71,6 @@ export default function SimpleNetworkCanvas({
 
     currentNetwork.links.forEach(link => {
       const key = [link.source, link.target].sort().join('-');
-      const reverseKey = [link.target, link.source].sort().join('-');
 
       if (!linkPairs.has(key)) {
         linkPairs.set(key, { primary: link });
@@ -153,37 +160,57 @@ export default function SimpleNetworkCanvas({
         }
       };
     });
-  })();
+  }, [currentNetwork?.links]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(reactFlowNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(reactFlowEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Update React Flow nodes when store changes or execution state changes
+  // Apply hierarchical layout only once when network changes and nodes need positioning
   useEffect(() => {
-    setNodes(reactFlowNodes);
-  }, [currentNetwork?.nodes, executionHistory, currentStep, setNodes]);
-
-  // Update React Flow edges when store changes
-  useEffect(() => {
-    setEdges(reactFlowEdges);
-  }, [currentNetwork?.links, setEdges]);
-
-  // Apply hierarchical layout only once when network first loads
-  useEffect(() => {
-    if (currentNetwork && currentNetwork.nodes.length > 0 && currentNetwork.links.length > 0) {
-      // Check if ALL nodes are at origin (0,0) - indicating fresh load
-      const allNodesAtOrigin = currentNetwork.nodes.every(node =>
-        node.position.x === 0 && node.position.y === 0
-      );
-
-      if (allNodesAtOrigin) {
+    if (!currentNetwork || isLayoutingRef.current) return;
+    
+    const networkId = currentNetwork.id;
+    const hasNodes = currentNetwork.nodes.length > 0;
+    const hasLinks = currentNetwork.links.length > 0;
+    
+    // Check if layout has already been applied for this network
+    if (layoutAppliedRef.current === networkId) return;
+    
+    // Check if nodes need positioning (all at origin)
+    const needsLayout = hasNodes && currentNetwork.nodes.every(node => 
+      node.position.x === 0 && node.position.y === 0
+    );
+    
+    if (needsLayout && hasLinks) {
+      isLayoutingRef.current = true;
+      
+      try {
         const layoutedNodes = hierarchicalLayout(currentNetwork.nodes, currentNetwork.links);
+        
+        // Update positions in batch to avoid multiple re-renders
         layoutedNodes.forEach(node => {
           updateNode(node.id, { position: node.position });
         });
+        
+        layoutAppliedRef.current = networkId;
+      } finally {
+        isLayoutingRef.current = false;
       }
+    } else if (hasNodes && !hasLinks) {
+      // For networks without links, just mark as layout applied
+      layoutAppliedRef.current = networkId;
     }
-  }, [currentNetwork?.id, currentNetwork?.nodes.length]); // Only run when network ID or node count changes
+  }, [currentNetwork?.id, currentNetwork?.nodes.length, currentNetwork?.links.length, updateNode]);
+
+  // Update React Flow nodes when memoized nodes change
+  useEffect(() => {
+    setNodes(reactFlowNodes);
+  }, [reactFlowNodes, setNodes]);
+
+  // Update React Flow edges when memoized edges change
+  useEffect(() => {
+    setEdges(reactFlowEdges);
+  }, [reactFlowEdges, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -212,6 +239,13 @@ export default function SimpleNetworkCanvas({
     onEdgeSelect?.(null);
   }, [onNodeSelect, onEdgeSelect]);
 
+  // Handle node position changes
+  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
+    updateNode(node.id, {
+      position: node.position,
+    });
+  }, [updateNode]);
+
   return (
     <div className="h-full w-full">
       <ReactFlow
@@ -223,6 +257,7 @@ export default function SimpleNetworkCanvas({
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        onNodeDragStop={onNodeDragStop}
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.1, includeHiddenNodes: false, minZoom: 0.5, maxZoom: 1.5 }}

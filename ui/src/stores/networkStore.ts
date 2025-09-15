@@ -4,6 +4,39 @@ import { create } from 'zustand';
 import { ReCoNNetwork, ReCoNNode, ReCoNLink, NetworkState, ExecutionState } from '../types/recon';
 import { reconAPI } from '../services/api';
 
+// Local storage utilities for node positions
+const POSITIONS_STORAGE_KEY = 'recon-node-positions';
+
+interface StoredPositions {
+  [networkId: string]: {
+    [nodeId: string]: { x: number; y: number };
+  };
+}
+
+const getStoredPositions = (): StoredPositions => {
+  try {
+    const stored = localStorage.getItem(POSITIONS_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
+const savePositions = (networkId: string, positions: Record<string, { x: number; y: number }>) => {
+  try {
+    const stored = getStoredPositions();
+    stored[networkId] = positions;
+    localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(stored));
+  } catch (error) {
+    console.warn('Failed to save positions to localStorage:', error);
+  }
+};
+
+const getNetworkPositions = (networkId: string): Record<string, { x: number; y: number }> => {
+  const stored = getStoredPositions();
+  return stored[networkId] || {};
+};
+
 interface NetworkStore extends NetworkState {
   shouldRelayout?: boolean;
   // Network operations
@@ -34,6 +67,7 @@ interface NetworkStore extends NetworkState {
   setDirty: (dirty: boolean) => void;
   clearSelection: () => void;
   setShouldRelayout: (should: boolean) => void;
+  saveCurrentPositions: () => void;
 }
 
 interface ExecutionStore extends ExecutionState {
@@ -56,6 +90,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   createNetwork: async (id?: string) => {
     try {
       const response = await reconAPI.createNetwork(id);
+      const storedPositions = getNetworkPositions(response.network_id);
+      
       const network: ReCoNNetwork = {
         id: response.network_id,
         nodes: response.nodes.map(node => ({
@@ -63,7 +99,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
           type: node.node_type as any,
           state: node.state as any,
           activation: node.activation,
-          position: { x: 0, y: 0 }, // Will be set by layout
+          // Restore position from localStorage or default to (0,0) for layout
+          position: storedPositions[node.node_id] || { x: 0, y: 0 },
         })),
         links: response.links.map(link => ({
           id: `${link.source}-${link.target}-${link.link_type}`,
@@ -86,15 +123,25 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   loadNetwork: async (id: string) => {
     try {
       const response = await reconAPI.getNetwork(id);
+      const storedPositions = getNetworkPositions(response.network_id);
+      
+      console.log(`Loading network ${response.network_id}, found ${Object.keys(storedPositions).length} stored positions`);
+      
       const network: ReCoNNetwork = {
         id: response.network_id,
-        nodes: response.nodes.map(node => ({
-          id: node.node_id,
-          type: node.node_type as any,
-          state: node.state as any,
-          activation: node.activation,
-          position: { x: 0, y: 0 }, // Will be set by layout
-        })),
+        nodes: response.nodes.map(node => {
+          const position = storedPositions[node.node_id] || { x: 0, y: 0 };
+          console.log(`Node ${node.node_id}: position ${position.x}, ${position.y}`);
+          
+          return {
+            id: node.node_id,
+            type: node.node_type as any,
+            state: node.state as any,
+            activation: node.activation,
+            // Restore position from localStorage or default to (0,0) for layout
+            position,
+          };
+        }),
         links: response.links.map(link => ({
           id: `${link.source}-${link.target}-${link.link_type}`,
           source: link.source,
@@ -168,16 +215,48 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   updateNode: (id: string, updates: Partial<ReCoNNode>) => {
-    set(state => ({
-      currentNetwork: state.currentNetwork ? {
+    set(state => {
+      if (!state.currentNetwork) return state;
+      
+      const existingNode = state.currentNetwork.nodes.find(node => node.id === id);
+      if (!existingNode) return state;
+      
+      // Check if the update actually changes anything
+      const hasChanges = Object.keys(updates).some(key => {
+        const updateKey = key as keyof ReCoNNode;
+        if (updateKey === 'position') {
+          return existingNode.position.x !== updates.position?.x || 
+                 existingNode.position.y !== updates.position?.y;
+        }
+        return existingNode[updateKey] !== updates[updateKey];
+      });
+      
+      if (!hasChanges) return state; // No changes, return current state
+      
+      const updatedNetwork = {
         ...state.currentNetwork,
         nodes: state.currentNetwork.nodes.map(node =>
           node.id === id ? { ...node, ...updates } : node
         ),
-      } : null,
-      selectedNode: state.selectedNode?.id === id ? { ...state.selectedNode, ...updates } : state.selectedNode,
-      isDirty: updates.position ? false : true, // Don't mark dirty for position updates (UI-only)
-    }));
+      };
+      
+      // Save positions to localStorage when position is updated
+      if (updates.position) {
+        const positions = updatedNetwork.nodes.reduce((acc, node) => {
+          acc[node.id] = node.position;
+          return acc;
+        }, {} as Record<string, { x: number; y: number }>);
+        
+        console.log(`Saving positions for network ${updatedNetwork.id}:`, positions);
+        savePositions(updatedNetwork.id, positions);
+      }
+      
+      return {
+        currentNetwork: updatedNetwork,
+        selectedNode: state.selectedNode?.id === id ? { ...state.selectedNode, ...updates } : state.selectedNode,
+        isDirty: updates.position ? false : true, // Don't mark dirty for position updates (UI-only)
+      };
+    });
   },
 
   deleteNode: (id: string) => {
@@ -360,6 +439,18 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
   setShouldRelayout: (should: boolean) => {
     set({ shouldRelayout: should });
+  },
+
+  saveCurrentPositions: () => {
+    const { currentNetwork } = get();
+    if (!currentNetwork) return;
+    
+    const positions = currentNetwork.nodes.reduce((acc, node) => {
+      acc[node.id] = node.position;
+      return acc;
+    }, {} as Record<string, { x: number; y: number }>);
+    
+    savePositions(currentNetwork.id, positions);
   },
 }));
 

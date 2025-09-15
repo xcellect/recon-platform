@@ -16,29 +16,44 @@ import { useNetworkStore } from '../stores/networkStore';
 interface SimpleNetworkCanvasProps {
   onNodeSelect?: (nodeId: string | null) => void;
   onEdgeSelect?: (edgeId: string | null) => void;
+  executionHistory?: any[];
+  currentStep?: number;
 }
 
-export default function SimpleNetworkCanvas({ onNodeSelect, onEdgeSelect }: SimpleNetworkCanvasProps) {
+export default function SimpleNetworkCanvas({
+  onNodeSelect,
+  onEdgeSelect,
+  executionHistory = [],
+  currentStep = 0
+}: SimpleNetworkCanvasProps) {
   const { currentNetwork, addLink } = useNetworkStore();
 
+  // Get current step data for state override
+  const currentStepData = executionHistory[currentStep];
+
   // Convert ReCoN nodes to React Flow nodes
-  const reactFlowNodes: Node[] = currentNetwork?.nodes.map(node => ({
-    id: node.id,
-    type: 'default',
-    position: node.position,
-    data: {
-      label: `${node.id}\n(${node.type})`,
-      state: node.state
-    },
-    style: {
-      backgroundColor: getNodeColor(node.type, node.state),
-      border: `2px solid ${getBorderColor(node.type)}`,
-      borderRadius: '8px',
-      padding: '10px',
-      minWidth: '100px',
-      textAlign: 'center'
-    }
-  })) || [];
+  const reactFlowNodes: Node[] = currentNetwork?.nodes.map(node => {
+    // Use execution history state if available, otherwise use base state
+    const currentState = currentStepData?.states?.[node.id] || node.state;
+
+    return {
+      id: node.id,
+      type: 'default',
+      position: node.position,
+      data: {
+        label: `${node.id}\n(${node.type})\n${currentState}`,
+        state: currentState
+      },
+      style: {
+        backgroundColor: getNodeColor(node.type, currentState),
+        border: `2px solid ${getBorderColor(node.type)}`,
+        borderRadius: '8px',
+        padding: '10px',
+        minWidth: '100px',
+        textAlign: 'center'
+      }
+    };
+  }) || [];
 
   // Convert ReCoN links to React Flow edges
   const reactFlowEdges: Edge[] = currentNetwork?.links.map(link => ({
@@ -56,10 +71,10 @@ export default function SimpleNetworkCanvas({ onNodeSelect, onEdgeSelect }: Simp
   const [nodes, setNodes, onNodesChange] = useNodesState(reactFlowNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(reactFlowEdges);
 
-  // Update React Flow nodes when store changes
+  // Update React Flow nodes when store changes or execution state changes
   useEffect(() => {
     setNodes(reactFlowNodes);
-  }, [currentNetwork?.nodes, setNodes]);
+  }, [currentNetwork?.nodes, executionHistory, currentStep, setNodes]);
 
   // Update React Flow edges when store changes
   useEffect(() => {
@@ -119,23 +134,20 @@ export default function SimpleNetworkCanvas({ onNodeSelect, onEdgeSelect }: Simp
   );
 }
 
-// Helper functions for node styling
+// Helper functions for node styling - using exact colors from ReCoN draft
 function getNodeColor(nodeType: string, state: string): string {
-  const baseColors = {
-    script: '#e3f2fd',
-    terminal: '#e8f5e8',
-    hybrid: '#f3e5f5'
-  };
-
   const stateColors = {
-    inactive: baseColors[nodeType as keyof typeof baseColors] || '#f5f5f5',
-    requested: '#bee3f8',
-    active: '#faf089',
-    confirmed: '#c6f6d5',
-    failed: '#fed7d7'
+    inactive: '#94a3b8',     // slate-400
+    requested: '#0ea5e9',    // sky-500
+    active: '#3b82f6',       // blue-500
+    suppressed: '#71717a',   // zinc-400
+    waiting: '#f59e0b',      // amber-500
+    true: '#10b981',         // emerald-500
+    confirmed: '#16a34a',    // green-600
+    failed: '#dc2626'        // rose-600
   };
 
-  return stateColors[state as keyof typeof stateColors] || baseColors[nodeType as keyof typeof baseColors] || '#f5f5f5';
+  return stateColors[state as keyof typeof stateColors] || '#f5f5f5';
 }
 
 function getBorderColor(nodeType: string): string {

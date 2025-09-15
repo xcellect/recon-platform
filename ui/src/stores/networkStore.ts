@@ -5,6 +5,7 @@ import { ReCoNNetwork, ReCoNNode, ReCoNLink, NetworkState, ExecutionState } from
 import { reconAPI } from '../services/api';
 
 interface NetworkStore extends NetworkState {
+  shouldRelayout?: boolean;
   // Network operations
   createNetwork: (id?: string) => Promise<void>;
   loadNetwork: (id: string) => Promise<void>;
@@ -32,6 +33,7 @@ interface NetworkStore extends NetworkState {
   // UI state
   setDirty: (dirty: boolean) => void;
   clearSelection: () => void;
+  setShouldRelayout: (should: boolean) => void;
 }
 
 interface ExecutionStore extends ExecutionState {
@@ -48,6 +50,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   selectedNode: null,
   selectedLink: null,
   isDirty: false,
+  shouldRelayout: false,
 
   // Network operations
   createNetwork: async (id?: string) => {
@@ -338,6 +341,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
             activation: 0,
           })),
         } : null,
+        shouldRelayout: true, // Trigger relayout after reset
       }));
     } catch (error) {
       console.error('Failed to reset network:', error);
@@ -352,6 +356,10 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
   clearSelection: () => {
     set({ selectedNode: null, selectedLink: null });
+  },
+
+  setShouldRelayout: (should: boolean) => {
+    set({ shouldRelayout: should });
   },
 }));
 

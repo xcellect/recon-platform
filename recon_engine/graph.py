@@ -418,15 +418,79 @@ class ReCoNGraph:
         Returns final state: 'confirmed', 'failed', or 'timeout'.
         """
         self.request_root(root_id)
-        
+
         for step in range(max_steps):
             self.propagate_step()
-            
+
             if self.is_completed():
                 result = self.get_results()[root_id]
                 return result
-        
+
         return "timeout"
+
+    def execute_script_with_history(self, root_id: str, max_steps: int = 100) -> Dict[str, Any]:
+        """
+        Execute a script to completion, capturing full execution history.
+        Returns final state and all intermediate steps.
+        """
+        history = []
+
+        # Initial state (step 0)
+        initial_states = {node_id: node.state.value for node_id, node in self.nodes.items()}
+        history.append({
+            "step": 0,
+            "states": initial_states,
+            "messages": []
+        })
+
+        self.request_root(root_id)
+
+        for step in range(1, max_steps + 1):
+            # Capture current messages before propagation
+            current_messages = []
+            for message in self.message_queue:
+                current_messages.append({
+                    "type": message.type.value,
+                    "from": message.source,
+                    "to": message.target,
+                    "link": message.link_type
+                })
+
+            # Add root request messages
+            if root_id in self.requested_roots:
+                current_messages.append({
+                    "type": "request",
+                    "from": "user",
+                    "to": root_id,
+                    "link": "sub"
+                })
+
+            self.propagate_step()
+
+            # Capture state after propagation
+            step_states = {node_id: node.state.value for node_id, node in self.nodes.items()}
+
+            history.append({
+                "step": step,
+                "states": step_states,
+                "messages": current_messages
+            })
+
+            if self.is_completed():
+                result = self.get_results()[root_id]
+                return {
+                    "result": result,
+                    "steps": history,
+                    "final_state": result,
+                    "total_steps": step
+                }
+
+        return {
+            "result": "timeout",
+            "steps": history,
+            "final_state": "timeout",
+            "total_steps": max_steps
+        }
     
     def to_react_flow_format(self) -> Dict[str, Any]:
         """

@@ -44,6 +44,40 @@ export interface ExecuteResponse {
   steps_taken: number;
 }
 
+export interface ExecutionHistoryResponse {
+  network_id: string;
+  root_node: string;
+  result: string;
+  steps: Array<{
+    step: number;
+    states: Record<string, string>;
+    messages: Array<{
+      type: string;
+      from: string;
+      to: string;
+      link: string;
+    }>;
+  }>;
+  final_state: string;
+  total_steps: number;
+}
+
+export interface VisualizationResponse {
+  network_id: string;
+  snapshot: {
+    nodes: Record<string, {
+      id: string;
+      type: string;
+      state: string;
+      activation: number;
+      gates: Record<string, number>;
+    }>;
+    step: number;
+    requested_roots: string[];
+    messages: number;
+  };
+}
+
 class ReCoNAPI {
   private baseUrl: string;
 
@@ -137,6 +171,20 @@ class ReCoNAPI {
     return response.json();
   }
 
+  async executeScriptWithHistory(networkId: string, executeData: ExecuteRequest): Promise<ExecutionHistoryResponse> {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/execute-with-history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(executeData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to execute script with history: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   async requestNode(networkId: string, nodeId: string) {
     const response = await fetch(`${this.baseUrl}/networks/${networkId}/request/${nodeId}`, {
       method: 'POST',
@@ -197,11 +245,35 @@ class ReCoNAPI {
     return response.json();
   }
 
-  async getVisualizationData(networkId: string) {
+  async getVisualizationData(networkId: string): Promise<VisualizationResponse> {
     const response = await fetch(`${this.baseUrl}/networks/${networkId}/visualize`);
 
     if (!response.ok) {
       throw new Error(`Failed to get visualization data: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async confirmNode(networkId: string, nodeId: string) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/nodes/${nodeId}/confirm`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to confirm node: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async failNode(networkId: string, nodeId: string) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/nodes/${nodeId}/fail`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fail node: ${response.statusText}`);
     }
 
     return response.json();

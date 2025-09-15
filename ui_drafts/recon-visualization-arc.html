@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReCoN ARC Solver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: white;
+        }
+
+        .main-container {
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #00ff88, #00bbff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .workspace {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+
+        .arc-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+        }
+
+        .arc-grids {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .grid-container {
+            text-align: center;
+        }
+
+        .grid-label {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #00ff88;
+            font-weight: 600;
+        }
+
+        .arc-grid {
+            display: inline-grid;
+            grid-template-columns: repeat(3, 40px);
+            grid-template-rows: repeat(3, 40px);
+            gap: 2px;
+            background: #222;
+            padding: 5px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .cell {
+            width: 40px;
+            height: 40px;
+            border: 1px solid #444;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.3);
+        }
+
+        .cell.black { background: #000; }
+        .cell.blue { background: #0074D9; }
+        .cell.red { background: #FF4136; }
+        .cell.green { background: #2ECC40; }
+        .cell.yellow { background: #FFDC00; }
+        .cell.gray { background: #888; }
+        .cell.pink { background: #F012BE; }
+        .cell.orange { background: #FF851B; }
+        .cell.cyan { background: #00ffff; }
+        .cell.brown { background: #8B4513; }
+
+        .cell.processing {
+            animation: pulse 0.5s infinite;
+            border-color: #00ff88;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        #recon-canvas {
+            width: 100%;
+            height: 500px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(45deg, #00ff88, #00bbff);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(0, 255, 136, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.5);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .info-panel h3 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            font-size: 0.9em;
+            border-left: 3px solid #00ff88;
+        }
+
+        .hypothesis-panel {
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .hypothesis-panel h4 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .hypothesis-item {
+            padding: 5px;
+            margin: 5px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        .hypothesis-item.active {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+        }
+
+        .hypothesis-item.confirmed {
+            background: rgba(0, 255, 136, 0.3);
+        }
+
+        .hypothesis-item.failed {
+            background: rgba(255, 65, 54, 0.2);
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+
+        .legend {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .legend h3 {
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9em;
+        }
+
+        .state-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid white;
+        }
+
+        .transform-visualization {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 255, 136, 0.05);
+            border-radius: 10px;
+        }
+
+        .arrow {
+            font-size: 24px;
+            color: #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h1>ReCoN ARC Puzzle Solver</h1>
+        <div class="subtitle">Watch a Request Confirmation Network solve pattern transformations</div>
+        
+        <div class="controls">
+            <button id="startBtn">Start Solving</button>
+            <button id="stepBtn">Step Forward</button>
+            <button id="resetBtn">Reset</button>
+            <button id="autoBtn">Auto Solve</button>
+        </div>
+
+        <div class="workspace">
+            <div class="arc-section">
+                <h3 style="color: #00ff88; margin-bottom: 15px;">ARC Puzzle</h3>
+                <div class="arc-grids">
+                    <div class="grid-container">
+                        <div class="grid-label">INPUT</div>
+                        <div class="arc-grid" id="inputGrid"></div>
+                    </div>
+                </div>
+                
+                <div class="transform-visualization">
+                    <span class="arrow">→</span>
+                    <span id="transformType" style="color: #00bbff;">?</span>
+                    <span class="arrow">→</span>
+                </div>
+                
+                <div class="arc-grids">
+                    <div class="grid-container">
+                        <div class="grid-label">OUTPUT</div>
+                        <div class="arc-grid" id="outputGrid"></div>
+                    </div>
+                </div>
+
+                <div class="hypothesis-panel">
+                    <h4>Hypotheses</h4>
+                    <div id="hypothesesList">
+                        <div class="hypothesis-item" id="hyp-rotate">🔄 Rotation</div>
+                        <div class="hypothesis-item" id="hyp-mirror-h">↔️ Mirror Horizontal</div>
+                        <div class="hypothesis-item" id="hyp-mirror-v">↕️ Mirror Vertical</div>
+                        <div class="hypothesis-item" id="hyp-invert">🔲 Color Invert</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="arc-section">
+                <h3 style="color: #00ff88; margin-bottom: 15px;">ReCoN Network</h3>
+                <canvas id="recon-canvas"></canvas>
+            </div>
+        </div>
+
+        <div class="legend">
+            <h3>Node States</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <div class="state-indicator" style="background: #444;"></div>
+                    <span>Inactive</span>
+                </div>
+                <div class="legend-item">
+                    <div class="state-indicator" style="background: #FFA500;"></div>
+                    <span>Requested</span>
+                </div>
+                <div class="legend-item">
+                    <div class="state-indicator" style="background: #FFD700;"></div>
+                    <span>Active</span>
+                </div>
+                <div class="legend-item">
+                    <div class="state-indicator" style="background: #4ECDC4;"></div>
+                    <span>Waiting</span>
+                </div>
+                <div class="legend-item">
+                    <div class="state-indicator" style="background: #50C878;"></div>
+                    <span>Confirmed</span>
+                </div>
+                <div class="legend-item">
+                    <div class="state-indicator" style="background: #FF4444;"></div>
+                    <span>Failed</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <h3>Execution Log</h3>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // ARC puzzle data
+        const puzzleInput = [
+            ['blue', 'blue', 'black'],
+            ['blue', 'black', 'black'],
+            ['black', 'black', 'black']
+        ];
+
+        const puzzleTarget = [
+            ['black', 'blue', 'blue'],
+            ['black', 'black', 'blue'],
+            ['black', 'black', 'black']
+        ];
+
+        let currentOutput = [
+            ['black', 'black', 'black'],
+            ['black', 'black', 'black'],
+            ['black', 'black', 'black']
+        ];
+
+        // Canvas setup
+        const canvas = document.getElementById('recon-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.offsetWidth;
+        canvas.height = 500;
+
+        // Node states
+        const States = {
+            INACTIVE: 'inactive',
+            REQUESTED: 'requested',
+            ACTIVE: 'active',
+            WAITING: 'waiting',
+            CONFIRMED: 'confirmed',
+            FAILED: 'failed'
+        };
+
+        const stateColors = {
+            [States.INACTIVE]: '#444',
+            [States.REQUESTED]: '#FFA500',
+            [States.ACTIVE]: '#FFD700',
+            [States.WAITING]: '#4ECDC4',
+            [States.CONFIRMED]: '#50C878',
+            [States.FAILED]: '#FF4444'
+        };
+
+        // ReCoN Node class
+        class Node {
+            constructor(id, label, x, y, action = null) {
+                this.id = id;
+                this.label = label;
+                this.x = x;
+                this.y = y;
+                this.state = States.INACTIVE;
+                this.action = action;
+                this.radius = 25;
+                this.pulsePhase = 0;
+                this.children = [];
+                this.parent = null;
+            }
+
+            draw() {
+                if (this.state !== States.INACTIVE) {
+                    this.pulsePhase += 0.08;
+                    const pulse = Math.sin(this.pulsePhase) * 3;
+                    this.radius = 25 + pulse;
+                }
+
+                // Draw node
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = stateColors[this.state];
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw label
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 11px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Split long labels
+                const lines = this.label.split('\n');
+                lines.forEach((line, i) => {
+                    ctx.fillText(line, this.x, this.y + (i - (lines.length - 1) / 2) * 12);
+                });
+            }
+        }
+
+        // Create ReCoN network for ARC solving
+        const nodes = {};
+        
+        // Root: Pattern Recognition
+        nodes['root'] = new Node('root', 'Pattern\nRecognition', canvas.width / 2, 50);
+        
+        // Hypotheses layer
+        nodes['rotate'] = new Node('rotate', 'Test\nRotation', canvas.width / 2 - 200, 150);
+        nodes['mirror_h'] = new Node('mirror_h', 'Test\nMirror H', canvas.width / 2 - 70, 150);
+        nodes['mirror_v'] = new Node('mirror_v', 'Test\nMirror V', canvas.width / 2 + 70, 150);
+        nodes['invert'] = new Node('invert', 'Test\nInvert', canvas.width / 2 + 200, 150);
+        
+        // Execution nodes for each hypothesis
+        nodes['exec_rotate'] = new Node('exec_rotate', 'Apply\nRotate', canvas.width / 2 - 200, 250, 'rotate');
+        nodes['exec_mirror_h'] = new Node('exec_mirror_h', 'Apply\nMirror H', canvas.width / 2 - 70, 250, 'mirror_h');
+        nodes['exec_mirror_v'] = new Node('exec_mirror_v', 'Apply\nMirror V', canvas.width / 2 + 70, 250, 'mirror_v');
+        nodes['exec_invert'] = new Node('exec_invert', 'Apply\nInvert', canvas.width / 2 + 200, 250, 'invert');
+        
+        // Validation nodes
+        nodes['val_rotate'] = new Node('val_rotate', 'Validate\nRotate', canvas.width / 2 - 200, 350);
+        nodes['val_mirror_h'] = new Node('val_mirror_h', 'Validate\nMirror H', canvas.width / 2 - 70, 350);
+        nodes['val_mirror_v'] = new Node('val_mirror_v', 'Validate\nMirror V', canvas.width / 2 + 70, 350);
+        nodes['val_invert'] = new Node('val_invert', 'Validate\nInvert', canvas.width / 2 + 200, 350);
+        
+        // Pixel check nodes (terminal)
+        nodes['check_rotate'] = new Node('check_rotate', 'Check\nPixels', canvas.width / 2 - 200, 430);
+        nodes['check_mirror_h'] = new Node('check_mirror_h', 'Check\nPixels', canvas.width / 2 - 70, 430);
+        nodes['check_mirror_v'] = new Node('check_mirror_v', 'Check\nPixels', canvas.width / 2 + 70, 430);
+        nodes['check_invert'] = new Node('check_invert', 'Check\nPixels', canvas.width / 2 + 200, 430);
+
+        // Set up relationships
+        nodes['root'].children = [nodes['rotate'], nodes['mirror_h'], nodes['mirror_v'], nodes['invert']];
+        
+        nodes['rotate'].parent = nodes['root'];
+        nodes['rotate'].children = [nodes['exec_rotate']];
+        
+        nodes['mirror_h'].parent = nodes['root'];
+        nodes['mirror_h'].children = [nodes['exec_mirror_h']];
+        
+        nodes['mirror_v'].parent = nodes['root'];
+        nodes['mirror_v'].children = [nodes['exec_mirror_v']];
+        
+        nodes['invert'].parent = nodes['root'];
+        nodes['invert'].children = [nodes['exec_invert']];
+        
+        nodes['exec_rotate'].parent = nodes['rotate'];
+        nodes['exec_rotate'].children = [nodes['val_rotate']];
+        
+        nodes['exec_mirror_h'].parent = nodes['mirror_h'];
+        nodes['exec_mirror_h'].children = [nodes['val_mirror_h']];
+        
+        nodes['exec_mirror_v'].parent = nodes['mirror_v'];
+        nodes['exec_mirror_v'].children = [nodes['val_mirror_v']];
+        
+        nodes['exec_invert'].parent = nodes['invert'];
+        nodes['exec_invert'].children = [nodes['val_invert']];
+        
+        nodes['val_rotate'].parent = nodes['exec_rotate'];
+        nodes['val_rotate'].children = [nodes['check_rotate']];
+        
+        nodes['val_mirror_h'].parent = nodes['exec_mirror_h'];
+        nodes['val_mirror_h'].children = [nodes['check_mirror_h']];
+        
+        nodes['val_mirror_v'].parent = nodes['exec_mirror_v'];
+        nodes['val_mirror_v'].children = [nodes['check_mirror_v']];
+        
+        nodes['val_invert'].parent = nodes['exec_invert'];
+        nodes['val_invert'].children = [nodes['check_invert']];
+        
+        nodes['check_rotate'].parent = nodes['val_rotate'];
+        nodes['check_mirror_h'].parent = nodes['val_mirror_h'];
+        nodes['check_mirror_v'].parent = nodes['val_mirror_v'];
+        nodes['check_invert'].parent = nodes['val_invert'];
+
+        // Animation variables
+        let animationStep = 0;
+        let isPlaying = false;
+        let messages = [];
+
+        // Grid manipulation functions
+        function createGrid(gridId, data) {
+            const grid = document.getElementById(gridId);
+            grid.innerHTML = '';
+            data.forEach((row, i) => {
+                row.forEach((color, j) => {
+                    const cell = document.createElement('div');
+                    cell.className = `cell ${color}`;
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    grid.appendChild(cell);
+                });
+            });
+        }
+
+        function rotateGrid(grid) {
+            const n = grid.length;
+            const rotated = Array(n).fill().map(() => Array(n).fill('black'));
+            for (let i = 0; i < n; i++) {
+                for (let j = 0; j < n; j++) {
+                    rotated[j][n - 1 - i] = grid[i][j];
+                }
+            }
+            return rotated;
+        }
+
+        function mirrorHorizontal(grid) {
+            return grid.map(row => [...row].reverse());
+        }
+
+        function mirrorVertical(grid) {
+            return [...grid].reverse();
+        }
+
+        function invertColors(grid) {
+            return grid.map(row => row.map(cell => 
+                cell === 'black' ? 'blue' : 'black'
+            ));
+        }
+
+        function gridsEqual(g1, g2) {
+            return g1.every((row, i) => 
+                row.every((cell, j) => cell === g2[i][j])
+            );
+        }
+
+        // Draw connections
+        function drawConnections() {
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.3)';
+            ctx.lineWidth = 2;
+
+            Object.values(nodes).forEach(node => {
+                if (node.children) {
+                    node.children.forEach(child => {
+                        ctx.beginPath();
+                        ctx.moveTo(node.x, node.y + node.radius);
+                        ctx.lineTo(child.x, child.y - child.radius);
+                        ctx.stroke();
+                    });
+                }
+            });
+        }
+
+        // Animation functions
+        function addLog(message) {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.textContent = `[Step ${animationStep}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function highlightHypothesis(id, state) {
+            const element = document.getElementById(`hyp-${id}`);
+            if (element) {
+                element.className = 'hypothesis-item';
+                if (state === 'active') element.classList.add('active');
+                else if (state === 'confirmed') element.classList.add('confirmed');
+                else if (state === 'failed') element.classList.add('failed');
+            }
+        }
+
+        function highlightCells(processing = false) {
+            const cells = document.querySelectorAll('#outputGrid .cell');
+            cells.forEach(cell => {
+                if (processing) {
+                    cell.classList.add('processing');
+                } else {
+                    cell.classList.remove('processing');
+                }
+            });
+        }
+
+        function resetSimulation() {
+            animationStep = 0;
+            Object.values(nodes).forEach(node => {
+                node.state = States.INACTIVE;
+                node.pulsePhase = 0;
+            });
+            currentOutput = Array(3).fill().map(() => Array(3).fill('black'));
+            createGrid('outputGrid', currentOutput);
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('transformType').textContent = '?';
+            document.querySelectorAll('.hypothesis-item').forEach(el => {
+                el.className = 'hypothesis-item';
+            });
+            addLog('ReCoN network ready to solve ARC puzzle');
+        }
+
+        function executeStep() {
+            switch(animationStep) {
+                case 0:
+                    nodes['root'].state = States.REQUESTED;
+                    addLog('Pattern Recognition node activated - starting hypothesis testing');
+                    break;
+                case 1:
+                    nodes['root'].state = States.ACTIVE;
+                    nodes['rotate'].state = States.REQUESTED;
+                    nodes['mirror_h'].state = States.REQUESTED;
+                    nodes['mirror_v'].state = States.REQUESTED;
+                    nodes['invert'].state = States.REQUESTED;
+                    addLog('Testing all transformation hypotheses in parallel');
+                    break;
+                case 2:
+                    nodes['root'].state = States.WAITING;
+                    nodes['rotate'].state = States.ACTIVE;
+                    nodes['exec_rotate'].state = States.REQUESTED;
+                    highlightHypothesis('rotate', 'active');
+                    addLog('Testing ROTATION hypothesis');
+                    break;
+                case 3:
+                    nodes['exec_rotate'].state = States.ACTIVE;
+                    currentOutput = rotateGrid(puzzleInput);
+                    createGrid('outputGrid', currentOutput);
+                    highlightCells(true);
+                    document.getElementById('transformType').textContent = 'Rotate 90°';
+                    addLog('Applied rotation transformation');
+                    break;
+                case 4:
+                    nodes['val_rotate'].state = States.ACTIVE;
+                    nodes['check_rotate'].state = States.ACTIVE;
+                    highlightCells(false);
+                    addLog('Validating rotation result...');
+                    break;
+                case 5:
+                    nodes['check_rotate'].state = States.FAILED;
+                    nodes['val_rotate'].state = States.FAILED;
+                    nodes['exec_rotate'].state = States.FAILED;
+                    nodes['rotate'].state = States.FAILED;
+                    highlightHypothesis('rotate', 'failed');
+                    addLog('Rotation FAILED - output does not match target');
+                    break;
+                case 6:
+                    nodes['mirror_h'].state = States.ACTIVE;
+                    nodes['exec_mirror_h'].state = States.REQUESTED;
+                    highlightHypothesis('mirror-h', 'active');
+                    document.getElementById('transformType').textContent = '?';
+                    addLog('Testing MIRROR HORIZONTAL hypothesis');
+                    break;
+                case 7:
+                    nodes['exec_mirror_h'].state = States.ACTIVE;
+                    currentOutput = mirrorHorizontal(puzzleInput);
+                    createGrid('outputGrid', currentOutput);
+                    highlightCells(true);
+                    document.getElementById('transformType').textContent = 'Mirror ↔️';
+                    addLog('Applied horizontal mirror transformation');
+                    break;
+                case 8:
+                    nodes['val_mirror_h'].state = States.ACTIVE;
+                    nodes['check_mirror_h'].state = States.ACTIVE;
+                    highlightCells(false);
+                    addLog('Validating horizontal mirror result...');
+                    break;
+                case 9:
+                    if (gridsEqual(currentOutput, puzzleTarget)) {
+                        nodes['check_mirror_h'].state = States.CONFIRMED;
+                        nodes['val_mirror_h'].state = States.CONFIRMED;
+                        nodes['exec_mirror_h'].state = States.CONFIRMED;
+                        nodes['mirror_h'].state = States.CONFIRMED;
+                        highlightHypothesis('mirror-h', 'confirmed');
+                        addLog('✓ MIRROR HORIZONTAL CONFIRMED - Perfect match!');
+                    } else {
+                        nodes['check_mirror_h'].state = States.FAILED;
+                        nodes['val_mirror_h'].state = States.FAILED;
+                        nodes['exec_mirror_h'].state = States.FAILED;
+                        nodes['mirror_h'].state = States.FAILED;
+                        highlightHypothesis('mirror-h', 'failed');
+                        addLog('Mirror horizontal FAILED');
+                    }
+                    break;
+                case 10:
+                    nodes['mirror_v'].state = States.ACTIVE;
+                    nodes['exec_mirror_v'].state = States.REQUESTED;
+                    highlightHypothesis('mirror-v', 'active');
+                    document.getElementById('transformType').textContent = '?';
+                    addLog('Testing MIRROR VERTICAL hypothesis');
+                    break;
+                case 11:
+                    nodes['exec_mirror_v'].state = States.ACTIVE;
+                    currentOutput = mirrorVertical(puzzleInput);
+                    createGrid('outputGrid', currentOutput);
+                    highlightCells(true);
+                    document.getElementById('transformType').textContent = 'Mirror ↕️';
+                    addLog('Applied vertical mirror transformation');
+                    break;
+                case 12:
+                    nodes['val_mirror_v'].state = States.ACTIVE;
+                    nodes['check_mirror_v'].state = States.ACTIVE;
+                    highlightCells(false);
+                    addLog('Validating vertical mirror result...');
+                    break;
+                case 13:
+                    nodes['check_mirror_v'].state = States.FAILED;
+                    nodes['val_mirror_v'].state = States.FAILED;
+                    nodes['exec_mirror_v'].state = States.FAILED;
+                    nodes['mirror_v'].state = States.FAILED;
+                    highlightHypothesis('mirror-v', 'failed');
+                    addLog('Mirror vertical FAILED');
+                    break;
+                case 14:
+                    nodes['invert'].state = States.ACTIVE;
+                    nodes['exec_invert'].state = States.REQUESTED;
+                    highlightHypothesis('invert', 'active');
+                    document.getElementById('transformType').textContent = '?';
+                    addLog('Testing COLOR INVERT hypothesis');
+                    break;
+                case 15:
+                    nodes['exec_invert'].state = States.ACTIVE;
+                    currentOutput = invertColors(puzzleInput);
+                    createGrid('outputGrid', currentOutput);
+                    highlightCells(true);
+                    document.getElementById('transformType').textContent = 'Invert 🔲';
+                    addLog('Applied color inversion transformation');
+                    break;
+                case 16:
+                    nodes['val_invert'].state = States.ACTIVE;
+                    nodes['check_invert'].state = States.ACTIVE;
+                    highlightCells(false);
+                    addLog('Validating inversion result...');
+                    break;
+                case 17:
+                    nodes['check_invert'].state = States.FAILED;
+                    nodes['val_invert'].state = States.FAILED;
+                    nodes['exec_invert'].state = States.FAILED;
+                    nodes['invert'].state = States.FAILED;
+                    highlightHypothesis('invert', 'failed');
+                    addLog('Color invert FAILED');
+                    break;
+                case 18:
+                    nodes['root'].state = States.CONFIRMED;
+                    currentOutput = mirrorHorizontal(puzzleInput);
+                    createGrid('outputGrid', currentOutput);
+                    document.getElementById('transformType').textContent = 'Mirror ↔️';
+                    addLog('🎉 SOLUTION FOUND: Horizontal Mirror transformation!');
+                    break;
+                default:
+                    isPlaying = false;
+                    document.getElementById('autoBtn').textContent = 'Auto Solve';
+                    return;
+            }
+            animationStep++;
+        }
+
+        // Animation loop
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawConnections();
+            Object.values(nodes).forEach(node => node.draw());
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners
+        document.getElementById('startBtn').addEventListener('click', () => {
+            resetSimulation();
+            executeStep();
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', resetSimulation);
+
+        document.getElementById('stepBtn').addEventListener('click', () => {
+            if (animationStep === 0) resetSimulation();
+            executeStep();
+        });
+
+        document.getElementById('autoBtn').addEventListener('click', () => {
+            isPlaying = !isPlaying;
+            document.getElementById('autoBtn').textContent = isPlaying ? 'Pause' : 'Auto Solve';
+            
+            if (isPlaying) {
+                if (animationStep === 0) resetSimulation();
+                
+                const playStep = () => {
+                    if (isPlaying && animationStep <= 18) {
+                        executeStep();
+                        setTimeout(playStep, 800);
+                    } else {
+                        isPlaying = false;
+                        document.getElementById('autoBtn').textContent = 'Auto Solve';
+                    }
+                };
+                playStep();
+            }
+        });
+
+        // Initialize
+        createGrid('inputGrid', puzzleInput);
+        createGrid('outputGrid', currentOutput);
+        resetSimulation();
+        animate();
+    </script>
+</body>
+</html>

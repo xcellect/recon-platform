@@ -121,6 +121,14 @@ class ReCoNNode:
             self.gates[gate] = 0.0
         for link_type in self.incoming_messages:
             self.incoming_messages[link_type].clear()
+
+        # Clear terminal persistence counter
+        if hasattr(self, '_request_absent_count'):
+            self._request_absent_count = 0
+        
+        # Clear timeout counter for script nodes
+        if hasattr(self, '_no_children_count'):
+            self._no_children_count = 0
     
     def add_incoming_message(self, message: ReCoNMessage):
         """Add incoming message for processing."""

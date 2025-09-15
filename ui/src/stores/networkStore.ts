@@ -51,17 +51,33 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
   // Network operations
   createNetwork: async (id?: string) => {
-    // Create a local network without requiring backend
-    const networkId = id || `network_${Date.now()}`;
-    const network: ReCoNNetwork = {
-      id: networkId,
-      nodes: [],
-      links: [],
-      stepCount: 0,
-      requestedRoots: [],
-    };
+    try {
+      const response = await reconAPI.createNetwork(id);
+      const network: ReCoNNetwork = {
+        id: response.network_id,
+        nodes: response.nodes.map(node => ({
+          id: node.node_id,
+          type: node.node_type as any,
+          state: node.state as any,
+          activation: node.activation,
+          position: { x: 0, y: 0 }, // Will be set by layout
+        })),
+        links: response.links.map(link => ({
+          id: `${link.source}-${link.target}-${link.link_type}`,
+          source: link.source,
+          target: link.target,
+          type: link.link_type as any,
+          weight: link.weight,
+        })),
+        stepCount: response.step_count,
+        requestedRoots: [],
+      };
 
-    set({ currentNetwork: network, isDirty: false });
+      set({ currentNetwork: network, isDirty: false });
+    } catch (error) {
+      console.error('Failed to create network:', error);
+      throw error;
+    }
   },
 
   loadNetwork: async (id: string) => {
@@ -118,35 +134,34 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   // Node operations
   addNode: async (nodeData: any) => {
     const { currentNetwork } = get();
+    if (!currentNetwork) return;
 
-    // If no network exists, create a demo network first
-    if (!currentNetwork) {
-      const demoNetwork: ReCoNNetwork = {
-        id: 'demo-network',
-        nodes: [],
-        links: [],
-        stepCount: 0,
-        requestedRoots: [],
+    try {
+      const response = await reconAPI.createNode(currentNetwork.id, {
+        node_id: nodeData.id,
+        node_type: nodeData.type,
+      });
+
+      const newNode: ReCoNNode = {
+        id: response.node_id,
+        type: response.node_type,
+        state: response.state as any,
+        activation: response.activation,
+        mode: nodeData.mode,
+        position: nodeData.position,
       };
-      set({ currentNetwork: demoNetwork });
+
+      set(state => ({
+        currentNetwork: state.currentNetwork ? {
+          ...state.currentNetwork,
+          nodes: [...state.currentNetwork.nodes, newNode],
+        } : null,
+        isDirty: true,
+      }));
+    } catch (error) {
+      console.error('Failed to add node:', error);
+      throw error;
     }
-
-    const newNode: ReCoNNode = {
-      id: nodeData.id,
-      type: nodeData.type,
-      state: nodeData.state || 'inactive',
-      activation: nodeData.activation || 0,
-      mode: nodeData.mode,
-      position: nodeData.position,
-    };
-
-    set(state => ({
-      currentNetwork: state.currentNetwork ? {
-        ...state.currentNetwork,
-        nodes: [...state.currentNetwork.nodes, newNode],
-      } : null,
-      isDirty: true,
-    }));
   },
 
   updateNode: (id: string, updates: Partial<ReCoNNode>) => {
@@ -158,7 +173,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
         ),
       } : null,
       selectedNode: state.selectedNode?.id === id ? { ...state.selectedNode, ...updates } : state.selectedNode,
-      isDirty: true,
+      isDirty: updates.position ? false : true, // Don't mark dirty for position updates (UI-only)
     }));
   },
 
@@ -183,18 +198,33 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     const { currentNetwork } = get();
     if (!currentNetwork) return;
 
-    const newLink: ReCoNLink = {
-      ...linkData,
-      id: `${linkData.source}-${linkData.target}-${linkData.type}`,
-    };
+    try {
+      const response = await reconAPI.createLink(currentNetwork.id, {
+        source: linkData.source,
+        target: linkData.target,
+        link_type: linkData.type,
+        weight: linkData.weight,
+      });
 
-    set(state => ({
-      currentNetwork: state.currentNetwork ? {
-        ...state.currentNetwork,
-        links: [...state.currentNetwork.links, newLink],
-      } : null,
-      isDirty: true,
-    }));
+      const newLink: ReCoNLink = {
+        id: `${response.source}-${response.target}-${response.link_type}`,
+        source: response.source,
+        target: response.target,
+        type: response.link_type as any,
+        weight: response.weight,
+      };
+
+      set(state => ({
+        currentNetwork: state.currentNetwork ? {
+          ...state.currentNetwork,
+          links: [...state.currentNetwork.links, newLink],
+        } : null,
+        isDirty: true,
+      }));
+    } catch (error) {
+      console.error('Failed to add link:', error);
+      throw error;
+    }
   },
 
   updateLink: (id: string, updates: Partial<ReCoNLink>) => {

@@ -1,6 +1,6 @@
 // Main App component integrating all UI components
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import SimpleNetworkCanvas from './components/SimpleNetworkCanvas';
 import Toolbar from './components/Toolbar';
 import ControlPanel from './components/ControlPanel';
@@ -12,9 +12,29 @@ import type { ReCoNNodeType } from './types/recon';
 import { autoLayout, hierarchicalLayout, sequenceLayout, forceDirectedLayout } from './utils/layout';
 
 function App() {
-  const { currentNetwork, addNode, updateNode } = useNetworkStore();
+  const { currentNetwork, addNode, updateNode, loadNetwork } = useNetworkStore();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+
+  // Load demo network on startup
+  useEffect(() => {
+    const loadDemoNetwork = async () => {
+      try {
+        await loadNetwork('demo');
+        // Apply auto layout after loading
+        if (currentNetwork?.nodes.length) {
+          const layoutedNodes = autoLayout(currentNetwork.nodes, currentNetwork.links);
+          layoutedNodes.forEach(node => {
+            updateNode(node.id, { position: node.position });
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load demo network:', error);
+      }
+    };
+
+    loadDemoNetwork();
+  }, [loadNetwork, updateNode]);
 
   // Handle adding nodes from toolbar
   const handleAddNode = useCallback((type: ReCoNNodeType) => {

@@ -1,7 +1,8 @@
 // Execution control panel for ReCoN networks
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNetworkStore, useExecutionStore } from '../stores/networkStore';
+import { reconAPI } from '../services/api';
 
 export default function ControlPanel() {
   const {
@@ -10,6 +11,7 @@ export default function ControlPanel() {
     executeScript,
     propagateStep,
     resetNetwork,
+    updateNode,
   } = useNetworkStore();
 
   const {
@@ -25,6 +27,31 @@ export default function ControlPanel() {
   const [selectedRootNode, setSelectedRootNode] = useState('');
   const [maxSteps, setMaxSteps] = useState(100);
   const [stepByStep, setStepByStep] = useState(false);
+
+  // Polling for real-time state updates during execution
+  useEffect(() => {
+    if (!isExecuting || !currentNetwork) return;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await reconAPI.getVisualizationData(currentNetwork.id);
+
+        // Update node states from backend
+        response.snapshot.nodes.forEach((nodeData: any) => {
+          updateNode(nodeData.node_id, {
+            state: nodeData.state,
+            activation: nodeData.activation,
+          });
+        });
+
+        setCurrentStep(response.snapshot.step);
+      } catch (error) {
+        console.error('Failed to poll network state:', error);
+      }
+    }, 500); // Poll every 500ms during execution
+
+    return () => clearInterval(pollInterval);
+  }, [isExecuting, currentNetwork?.id, updateNode, setCurrentStep]);
 
   const handleRequestNode = async () => {
     if (!selectedRootNode) return;

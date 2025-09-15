@@ -1,0 +1,211 @@
+// API client for ReCoN Platform backend
+
+const API_BASE_URL = 'http://localhost:8000';
+
+export interface NodeCreateRequest {
+  node_id: string;
+  node_type: 'script' | 'terminal';
+}
+
+export interface LinkCreateRequest {
+  source: string;
+  target: string;
+  link_type: 'sub' | 'sur' | 'por' | 'ret' | 'gen';
+  weight: number;
+}
+
+export interface ExecuteRequest {
+  root_node: string;
+  max_steps: number;
+}
+
+export interface NetworkResponse {
+  network_id: string;
+  nodes: Array<{
+    node_id: string;
+    node_type: string;
+    state: string;
+    activation: number;
+  }>;
+  links: Array<{
+    source: string;
+    target: string;
+    link_type: string;
+    weight: number;
+  }>;
+  step_count: number;
+}
+
+export interface ExecuteResponse {
+  network_id: string;
+  root_node: string;
+  result: string;
+  final_states: Record<string, string>;
+  steps_taken: number;
+}
+
+class ReCoNAPI {
+  private baseUrl: string;
+
+  constructor(baseUrl: string = API_BASE_URL) {
+    this.baseUrl = baseUrl;
+  }
+
+  async createNetwork(networkId?: string): Promise<NetworkResponse> {
+    const response = await fetch(`${this.baseUrl}/networks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ network_id: networkId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getNetwork(networkId: string): Promise<NetworkResponse> {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async listNetworks(): Promise<string[]> {
+    const response = await fetch(`${this.baseUrl}/networks`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to list networks: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async deleteNetwork(networkId: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}`, {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete network: ${response.statusText}`);
+    }
+  }
+
+  async createNode(networkId: string, nodeData: NodeCreateRequest) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/nodes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(nodeData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create node: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async createLink(networkId: string, linkData: LinkCreateRequest) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(linkData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to create link: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async executeScript(networkId: string, executeData: ExecuteRequest): Promise<ExecuteResponse> {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(executeData),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to execute script: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async requestNode(networkId: string, nodeId: string) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/request/${nodeId}`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to request node: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async propagateStep(networkId: string) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/step`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to propagate step: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async resetNetwork(networkId: string) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/reset`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to reset network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async exportNetwork(networkId: string, format: string = 'json') {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/export?format=${format}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to export network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async importNetwork(data: any, networkId?: string) {
+    const response = await fetch(`${this.baseUrl}/networks/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to import network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getVisualizationData(networkId: string) {
+    const response = await fetch(`${this.baseUrl}/networks/${networkId}/visualize`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get visualization data: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+}
+
+export const reconAPI = new ReCoNAPI();

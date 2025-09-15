@@ -25,7 +25,7 @@ function App() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Network Canvas */}
-      <div className="flex-1 relative">
+      <div className="h-[70vh] relative">
         <SimpleNetworkCanvas
           executionHistory={executionHistory}
           currentStep={currentStep}
@@ -33,7 +33,7 @@ function App() {
       </div>
 
       {/* Control Panel */}
-      <div className="h-64 bg-white border-t border-gray-200 p-4">
+      <div className="flex-1 bg-white border-t border-gray-200 p-4">
         <ControlPanel
           executionHistory={executionHistory}
           setExecutionHistory={setExecutionHistory}

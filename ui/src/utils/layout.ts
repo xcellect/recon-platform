@@ -10,10 +10,10 @@ export interface LayoutOptions {
 }
 
 const defaultLayoutOptions: LayoutOptions = {
-  nodeWidth: 150,
-  nodeHeight: 80,
-  horizontalSpacing: 200,
-  verticalSpacing: 120,
+  nodeWidth: 120,
+  nodeHeight: 60,
+  horizontalSpacing: 180,
+  verticalSpacing: 100,
 };
 
 export function hierarchicalLayout(

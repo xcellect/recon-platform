@@ -12,6 +12,12 @@ import ReactFlow, {
   Background,
 } from 'reactflow';
 import { useNetworkStore } from '../stores/networkStore';
+import { hierarchicalLayout } from '../utils/layout';
+import ReCoNNode from './ReCoNNode';
+
+const nodeTypes = {
+  reconNode: ReCoNNode,
+};
 
 interface SimpleNetworkCanvasProps {
   onNodeSelect?: (nodeId: string | null) => void;
@@ -26,7 +32,7 @@ export default function SimpleNetworkCanvas({
   executionHistory = [],
   currentStep = 0
 }: SimpleNetworkCanvasProps) {
-  const { currentNetwork, addLink } = useNetworkStore();
+  const { currentNetwork, addLink, updateNode } = useNetworkStore();
 
   // Get current step data for state override
   const currentStepData = executionHistory[currentStep];
@@ -38,35 +44,116 @@ export default function SimpleNetworkCanvas({
 
     return {
       id: node.id,
-      type: 'default',
+      type: 'reconNode',
       position: node.position,
       data: {
         label: `${node.id}\n(${node.type})\n${currentState}`,
-        state: currentState
-      },
-      style: {
-        backgroundColor: getNodeColor(node.type, currentState),
-        border: `2px solid ${getBorderColor(node.type)}`,
-        borderRadius: '8px',
-        padding: '10px',
-        minWidth: '100px',
-        textAlign: 'center'
+        state: currentState,
+        nodeType: node.type
       }
     };
   }) || [];
 
-  // Convert ReCoN links to React Flow edges
-  const reactFlowEdges: Edge[] = currentNetwork?.links.map(link => ({
-    id: link.id,
-    source: link.source,
-    target: link.target,
-    label: link.type,
-    style: {
-      stroke: getLinkColor(link.type),
-      strokeWidth: 2,
-      strokeDasharray: link.type === 'por' || link.type === 'ret' ? '5,5' : undefined
-    }
-  })) || [];
+  // Filter and convert ReCoN links to bidirectional React Flow edges
+  const reactFlowEdges: Edge[] = (() => {
+    if (!currentNetwork?.links) return [];
+
+    // Group links by their bidirectional pairs
+    const linkPairs = new Map<string, { primary: any; secondary?: any }>();
+
+    currentNetwork.links.forEach(link => {
+      const key = [link.source, link.target].sort().join('-');
+      const reverseKey = [link.target, link.source].sort().join('-');
+
+      if (!linkPairs.has(key)) {
+        linkPairs.set(key, { primary: link });
+      } else {
+        const existing = linkPairs.get(key);
+        if (existing) {
+          existing.secondary = link;
+        }
+      }
+    });
+
+    // Convert pairs to bidirectional edges
+    return Array.from(linkPairs.values()).map(({ primary, secondary }) => {
+      const isHierarchical = primary.type === 'sub' || primary.type === 'sur' ||
+                             (secondary && (secondary.type === 'sub' || secondary.type === 'sur'));
+
+      const isSequential = primary.type === 'por' || primary.type === 'ret' ||
+                           (secondary && (secondary.type === 'por' || secondary.type === 'ret'));
+
+      let label = '';
+      let sourceNode = primary.source;
+      let targetNode = primary.target;
+
+      if (isHierarchical) {
+        // For hierarchical relationships, show from parent to child
+        if (primary.type === 'sub') {
+          label = 'sub/sur';
+          sourceNode = primary.source;
+          targetNode = primary.target;
+        } else if (primary.type === 'sur') {
+          label = 'sub/sur';
+          sourceNode = primary.target;
+          targetNode = primary.source;
+        }
+      } else if (isSequential) {
+        // For sequential relationships, show from predecessor to successor
+        if (primary.type === 'por') {
+          label = 'por/ret';
+          sourceNode = primary.source;
+          targetNode = primary.target;
+        } else if (primary.type === 'ret') {
+          label = 'por/ret';
+          sourceNode = primary.target;
+          targetNode = primary.source;
+        }
+      } else {
+        // Fallback for single links
+        label = primary.type;
+        sourceNode = primary.source;
+        targetNode = primary.target;
+      }
+
+      // Determine source and target handles based on link type
+      let sourceHandle = '';
+      let targetHandle = '';
+
+      if (isHierarchical) {
+        // sub/sur links use top/bottom handles
+        sourceHandle = 'bottom-source';  // Parent connects from bottom
+        targetHandle = 'top';            // Child connects to top
+      } else if (isSequential) {
+        // por/ret links use left/right handles
+        sourceHandle = 'right-source';   // Predecessor connects from right
+        targetHandle = 'left';           // Successor connects to left
+      }
+
+      return {
+        id: `${sourceNode}-${targetNode}-${label}`,
+        source: sourceNode,
+        target: targetNode,
+        sourceHandle,
+        targetHandle,
+        label,
+        type: 'smoothstep',
+        style: {
+          stroke: isHierarchical ? '#1976d2' : '#f57c00',
+          strokeWidth: 2,
+          strokeDasharray: isSequential ? '5,5' : undefined
+        },
+        markerEnd: {
+          type: 'arrowclosed',
+          color: isHierarchical ? '#1976d2' : '#f57c00'
+        },
+        markerStart: {
+          type: 'arrowclosed',
+          color: isHierarchical ? '#1976d2' : '#f57c00'
+        }
+      };
+    });
+  })();
 
   const [nodes, setNodes, onNodesChange] = useNodesState(reactFlowNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(reactFlowEdges);
@@ -80,6 +167,23 @@ export default function SimpleNetworkCanvas({
   useEffect(() => {
     setEdges(reactFlowEdges);
   }, [currentNetwork?.links, setEdges]);
+
+  // Apply hierarchical layout only once when network first loads
+  useEffect(() => {
+    if (currentNetwork && currentNetwork.nodes.length > 0 && currentNetwork.links.length > 0) {
+      // Check if ALL nodes are at origin (0,0) - indicating fresh load
+      const allNodesAtOrigin = currentNetwork.nodes.every(node =>
+        node.position.x === 0 && node.position.y === 0
+      );
+
+      if (allNodesAtOrigin) {
+        const layoutedNodes = hierarchicalLayout(currentNetwork.nodes, currentNetwork.links);
+        layoutedNodes.forEach(node => {
+          updateNode(node.id, { position: node.position });
+        });
+      }
+    }
+  }, [currentNetwork?.id, currentNetwork?.nodes.length]); // Only run when network ID or node count changes
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -119,8 +223,9 @@ export default function SimpleNetworkCanvas({
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={onPaneClick}
+        nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.1, includeHiddenNodes: false, minZoom: 0.5, maxZoom: 1.5 }}
       >
         <Controls />
         <MiniMap
@@ -134,38 +239,4 @@ export default function SimpleNetworkCanvas({
   );
 }
 
-// Helper functions for node styling - using exact colors from ReCoN draft
-function getNodeColor(nodeType: string, state: string): string {
-  const stateColors = {
-    inactive: '#94a3b8',     // slate-400
-    requested: '#0ea5e9',    // sky-500
-    active: '#3b82f6',       // blue-500
-    suppressed: '#71717a',   // zinc-400
-    waiting: '#f59e0b',      // amber-500
-    true: '#10b981',         // emerald-500
-    confirmed: '#16a34a',    // green-600
-    failed: '#dc2626'        // rose-600
-  };
-
-  return stateColors[state as keyof typeof stateColors] || '#f5f5f5';
-}
-
-function getBorderColor(nodeType: string): string {
-  const colors = {
-    script: '#1976d2',
-    terminal: '#388e3c',
-    hybrid: '#7b1fa2'
-  };
-  return colors[nodeType as keyof typeof colors] || '#666';
-}
-
-function getLinkColor(linkType: string): string {
-  const colors = {
-    sub: '#1976d2',
-    sur: '#1976d2',
-    por: '#388e3c',
-    ret: '#388e3c',
-    gen: '#f57c00'
-  };
-  return colors[linkType as keyof typeof colors] || '#666';
-}
+// Styling functions moved to ReCoNNode component

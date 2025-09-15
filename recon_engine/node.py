@@ -440,15 +440,13 @@ class ReCoNNode:
             messages["por"] = "inhibit_request"
             messages["ret"] = "inhibit_confirm"
         
-        # Terminal nodes have restricted message types and behavior
+        # Terminal nodes follow Table 1 but can only send sur messages (per paper constraints)
         if self.type == "terminal":
-            # Terminals can only send sur messages, and have simpler state logic
-            if self.state == ReCoNState.CONFIRMED:
-                messages = {"sur": "confirm"}
-            elif self.state == ReCoNState.FAILED:
-                messages = {}  # Failed terminals send nothing
-            else:
-                messages = {}  # Inactive/other states send nothing
+            # Keep only sur messages, remove por/ret/sub messages
+            terminal_messages = {}
+            if "sur" in messages:
+                terminal_messages["sur"] = messages["sur"]
+            messages = terminal_messages
             
         return messages
     

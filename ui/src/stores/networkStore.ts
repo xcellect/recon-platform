@@ -305,6 +305,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
         type: n.type,
         state: n.state,
         activation: n.activation,
+        measurementValue: (n as any).measurementValue,
         gates: { sub: 0, sur: 0, por: 0, ret: 0, gen: 0 },
         timing_config: {
           timing_mode: 'discrete',

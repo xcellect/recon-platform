@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNetworkStore } from '../stores/networkStore';
 import { reconAPI } from '../services/api';
 
@@ -50,14 +50,12 @@ export default function ControlPanel({
         throw new Error('No network data to execute');
       }
       
-      // Configure terminals based on their activation values
+      // Configure terminals with their measurement values
       const terminalConfigs = currentNetwork.nodes
         .filter(node => node.type === 'terminal')
         .map(node => ({
           node_id: node.id,
-          measurement_type: node.activation >= 0.8 ? 'confirm' : 
-                          node.activation <= 0.2 ? 'fail' : 'default',
-          measurement_value: node.activation
+          measurement_value: (node as any).measurementValue || 0.5
         }));
       
       console.log('Terminal configs:', terminalConfigs);

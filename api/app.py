@@ -25,8 +25,7 @@ from schemas import (
 class TerminalConfig(BaseModel):
     """Configuration for a terminal node."""
     node_id: str = Field(..., description="Terminal node ID")
-    measurement_type: str = Field("default", description="Type: 'confirm', 'fail', 'default', or 'activation'")
-    measurement_value: Optional[float] = Field(None, description="Custom measurement value (0-1)")
+    measurement_value: float = Field(0.5, description="Measurement value (0-1)")
 
 class DirectExecuteRequest(BaseModel):
     """Request to execute a network directly from data."""
@@ -246,29 +245,17 @@ async def execute_network_direct(request: DirectExecuteRequest):
         # Create graph from provided data
         graph = ReCoNGraph.from_dict(request.network_data)
         
-        # Configure terminals based on user settings
+        # Configure terminals with user-defined measurement values
         print(f"Configuring {len(request.terminal_configs or [])} terminals")
         for terminal_config in request.terminal_configs or []:
-            print(f"Configuring terminal {terminal_config.node_id}: {terminal_config.measurement_type}")
+            print(f"Configuring terminal {terminal_config.node_id}: measurement={terminal_config.measurement_value}")
             if terminal_config.node_id in graph.nodes:
                 terminal_node = graph.get_node(terminal_config.node_id)
                 if terminal_node.type == "terminal":
-                    if terminal_config.measurement_type == "confirm":
-                        terminal_node.measurement_fn = lambda env: 1.0
-                        print(f"Set {terminal_config.node_id} to always confirm")
-                    elif terminal_config.measurement_type == "fail":
-                        terminal_node.measurement_fn = lambda env: 0.0
-                        print(f"Set {terminal_config.node_id} to always fail")
-                    elif terminal_config.measurement_type == "activation":
-                        # Use the node's activation value as measurement
-                        activation_val = float(terminal_node.activation)
-                        terminal_node.measurement_fn = lambda env: activation_val
-                        print(f"Set {terminal_config.node_id} to use activation {activation_val}")
-                    elif terminal_config.measurement_type == "custom" and terminal_config.measurement_value is not None:
-                        custom_val = float(terminal_config.measurement_value)
-                        terminal_node.measurement_fn = lambda env: custom_val
-                        print(f"Set {terminal_config.node_id} to custom value {custom_val}")
-                    # "default" keeps the existing 0.5 measurement
+                    # Set measurement function to return the user-specified value
+                    measurement_val = float(terminal_config.measurement_value)
+                    terminal_node.measurement_fn = lambda env, val=measurement_val: val
+                    print(f"Set {terminal_config.node_id} measurement to {measurement_val}")
                     
                     # Test the measurement function
                     test_measurement = terminal_node.measure()

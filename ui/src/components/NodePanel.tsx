@@ -19,6 +19,7 @@ export default function NodePanel() {
   const [nodeType, setNodeType] = useState<ReCoNNodeType>('script');
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('explicit');
   const [nodeActivation, setNodeActivation] = useState('0');
+  const [measurementValue, setMeasurementValue] = useState('0.5');
   const [isEditing, setIsEditing] = useState(false);
 
   // Link editing state
@@ -36,6 +37,8 @@ export default function NodePanel() {
       setNodeType(selectedNode.type);
       setExecutionMode(selectedNode.mode || 'explicit');
       setNodeActivation(selectedNode.activation.toString());
+      // Initialize terminal measurement setting
+      setMeasurementValue((selectedNode as any).measurementValue?.toString() || '0.5');
       setIsEditing(false);
     }
   }, [selectedNode?.id]); // Only depend on ID change, not the whole object
@@ -61,13 +64,14 @@ export default function NodePanel() {
   const handleUpdateNode = () => {
     if (!selectedNode) return;
 
-    console.log('Updating node:', selectedNode.id, 'with:', { id: nodeId, type: nodeType, mode: executionMode, activation: nodeActivation });
+    console.log('Updating node:', selectedNode.id, 'with:', { id: nodeId, type: nodeType, mode: executionMode, activation: nodeActivation, measurementValue });
     updateNode(selectedNode.id, {
       id: nodeId, // Allow ID changes
       type: nodeType,
       mode: executionMode,
       activation: parseFloat(nodeActivation) || 0,
-    });
+      measurementValue: parseFloat(measurementValue) || 0.5,
+    } as any);
     setIsEditing(false); // Reset editing flag after update
   };
 
@@ -221,23 +225,28 @@ export default function NodePanel() {
             <div className="space-y-3 pt-4 border-t border-gray-200">
               <h4 className="text-md font-medium text-gray-800">Terminal Configuration</h4>
 
-              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
-                <strong>Execution Behavior:</strong>
-                <ul className="mt-1 space-y-1">
-                  <li>• Activation ≥ 0.8 → Terminal confirms</li>
-                  <li>• Activation ≤ 0.2 → Terminal fails</li>
-                  <li>• 0.2 &lt; Activation &lt; 0.8 → Default (fails)</li>
-                </ul>
-              </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Current Behavior
+                  Measurement Value (0.0 - 1.0)
                 </label>
-                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
-                  {selectedNode.activation >= 0.8 ? '✅ Will CONFIRM (activation ≥ 0.8)' :
-                   selectedNode.activation <= 0.2 ? '❌ Will FAIL (activation ≤ 0.2)' :
-                   '⚠️ Will FAIL (default behavior)'}
+                <input
+                  type="number"
+                  value={measurementValue}
+                  onChange={(e) => {
+                    setIsEditing(true);
+                    setMeasurementValue(e.target.value);
+                  }}
+                  step="0.1"
+                  min="0"
+                  max="1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+                <strong>Behavior:</strong> {parseFloat(measurementValue) > 0.8 ? '✅ Will CONFIRM' : '❌ Will FAIL'}
+                <div className="text-xs mt-1">
+                  Threshold: 0.8 (measurement &gt; 0.8 confirms, &lt; 0.8 fails)
                 </div>
               </div>
             </div>

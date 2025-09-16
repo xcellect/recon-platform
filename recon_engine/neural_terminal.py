@@ -252,7 +252,9 @@ class NeuralTerminal(HybridReCoNNode):
     def _get_cache_key(self, environment: Any) -> str:
         """Generate cache key for environment."""
         if isinstance(environment, torch.Tensor):
-            return str(environment.data.numpy().tobytes())
+            # Handle CUDA tensors by moving to CPU first
+            tensor_cpu = environment.detach().cpu()
+            return str(tensor_cpu.numpy().tobytes())
         elif isinstance(environment, np.ndarray):
             return str(environment.tobytes())
         elif isinstance(environment, (list, tuple)):
@@ -345,10 +347,15 @@ class CNNValidActionTerminal(NeuralTerminal):
     Uses CNN architecture to predict action probabilities.
     """
     
-    def __init__(self, node_id: str):
+    def __init__(self, node_id: str, use_gpu: bool = True):
         # Create CNN-based action model
         model = self._create_action_model()
         super().__init__(node_id, model, NeuralOutputMode.PROBABILITY, (16, 64, 64))
+        
+        # Move to GPU if available and requested
+        if use_gpu and torch.cuda.is_available():
+            self.to_device('cuda')
+            print(f"CNNValidActionTerminal {node_id} using GPU: {next(self.model.parameters()).device}")
     
     def _create_action_model(self) -> nn.Module:
         """Create CNN-based action prediction model."""

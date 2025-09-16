@@ -17,7 +17,7 @@ from .messages import ReCoNMessage
 class NeuralOutputMode:
     """Output processing modes for neural terminals."""
     VALUE = "value"              # Single value prediction (BlindSquirrel style)
-    PROBABILITY = "probability"  # Probability distribution (StochasticGoose style)
+    PROBABILITY = "probability"  # Probability distribution (For specialized CNN terminal)
     CLASSIFICATION = "classification"  # Class prediction
     EMBEDDING = "embedding"      # Feature embedding
     MULTI_HEAD = "multi_head"    # Multiple outputs
@@ -199,7 +199,7 @@ class NeuralTerminal(HybridReCoNNode):
                 return raw_output.mean().item()
         
         elif self.output_mode == NeuralOutputMode.PROBABILITY:
-            # Probability distribution (e.g., StochasticGoose action probabilities)
+            # Probability distribution (e.g., specialized CNN terminal action probabilities)
             if raw_output.dim() > 1:
                 # Apply softmax to get probabilities
                 probabilities = F.softmax(raw_output, dim=-1)
@@ -301,7 +301,7 @@ class NeuralTerminal(HybridReCoNNode):
         return base_dict
 
 
-class BlindSquirrelValueTerminal(NeuralTerminal):
+class ResNetActionValueTerminal(NeuralTerminal):
     """
     Specialized terminal for BlindSquirrel-style value prediction.
     
@@ -338,9 +338,9 @@ class BlindSquirrelValueTerminal(NeuralTerminal):
             return super()._prepare_input(environment)
 
 
-class StochasticGooseActionTerminal(NeuralTerminal):
+class CNNValidActionTerminal(NeuralTerminal):
     """
-    Specialized terminal for StochasticGoose-style action prediction.
+    Specialized terminal for action prediction.
     
     Uses CNN architecture to predict action probabilities.
     """

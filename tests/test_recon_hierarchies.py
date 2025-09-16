@@ -243,7 +243,9 @@ class TestReCoNHierarchies:
         # Just verify the hierarchy structure works
         
         # Simulate Leaf1 succeeding
-        graph.get_node("TLeaf1").state = ReCoNState.CONFIRMED
+        terminal = graph.get_node("TLeaf1")
+        terminal.state = ReCoNState.CONFIRMED
+        terminal.activation = 1.0  # Set activation for proper propagation
         
         for step in range(10):
             graph.propagate_step()
@@ -367,7 +369,9 @@ class TestReCoNHierarchies:
         for step in range(10):
             graph.propagate_step()
             if graph.get_node("GoodChild").state == ReCoNState.WAITING:
-                graph.get_node("TGood").state = ReCoNState.CONFIRMED
+                terminal = graph.get_node("TGood")
+                terminal.state = ReCoNState.CONFIRMED
+                terminal.activation = 1.0  # Set activation for proper propagation
             if graph.get_node("Parent").state in [ReCoNState.TRUE, ReCoNState.CONFIRMED]:
                 break
         
@@ -408,7 +412,9 @@ class TestReCoNHierarchies:
         assert graph.get_node("Child2").state in [ReCoNState.ACTIVE, ReCoNState.WAITING, ReCoNState.REQUESTED]
         
         # Either child confirming should confirm parent
-        graph.get_node("TChild2").state = ReCoNState.CONFIRMED
+        terminal = graph.get_node("TChild2")
+        terminal.state = ReCoNState.CONFIRMED
+        terminal.activation = 1.0  # Set activation for proper propagation
         
         for step in range(5):
             graph.propagate_step()

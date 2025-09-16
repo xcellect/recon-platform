@@ -272,7 +272,7 @@ class ReCoNGraph:
                 
                 for link in outgoing_links:
                     message_type = MessageType(signal) if isinstance(signal, str) else MessageType.REQUEST
-                    activation = link.weight if signal in ["request", "confirm"] else 0.0
+                    activation = 0.0
                     
                     if signal == "inhibit_request":
                         message_type = MessageType.INHIBIT_REQUEST
@@ -285,7 +285,16 @@ class ReCoNGraph:
                         activation = 0.01
                     elif signal == "confirm":
                         message_type = MessageType.CONFIRM
-                        activation = 1.0
+                        # Scale confirmation activation by link weight and sender activation magnitude
+                        try:
+                            sender_act = node.activation.item() if hasattr(node.activation, 'numel') and node.activation.numel() == 1 else float(node.activation)
+                        except Exception:
+                            sender_act = 1.0
+                        try:
+                            link_w = link.weight.item() if hasattr(link.weight, 'numel') and getattr(link.weight, 'numel', lambda: 1)() == 1 else float(link.weight)
+                        except Exception:
+                            link_w = 1.0
+                        activation = sender_act * link_w
                     elif signal == "request":
                         message_type = MessageType.REQUEST
                         activation = 1.0

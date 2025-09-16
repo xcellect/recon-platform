@@ -264,7 +264,9 @@ class TestMessagePropagationIntegration:
 
         # Confirm A's terminal to allow A -> TRUE/CONFIRMED
         if graph.get_node("A").state == ReCoNState.WAITING:
-            graph.get_node("TA").state = ReCoNState.CONFIRMED
+            terminal = graph.get_node("TA")
+            terminal.state = ReCoNState.CONFIRMED
+            terminal.activation = 1.0  # Set activation for proper propagation
         # Allow for message generation and delivery across steps
         graph.propagate_step()
         graph.propagate_step()

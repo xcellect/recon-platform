@@ -77,11 +77,11 @@ class TestTerminalThresholdBehavior:
         if measurement_value > threshold:
             assert terminal.state == ReCoNState.CONFIRMED, \
                 f"measurement {measurement_value} > threshold {threshold} should confirm"
-            assert terminal.activation == 1.0, "Confirmed terminal should have activation 1.0"
+            assert terminal.activation == measurement_value, "Confirmed terminal should preserve measurement value"
         else:
             assert terminal.state == ReCoNState.FAILED, \
                 f"measurement {measurement_value} <= threshold {threshold} should fail"
-            assert terminal.activation == 0.0, "Failed terminal should have activation 0.0"
+            assert terminal.activation == measurement_value, "Failed terminal should preserve measurement value"
     
     def test_terminal_measurement_types(self):
         """Test different types of measurement functions."""

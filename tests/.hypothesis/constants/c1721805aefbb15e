@@ -1,0 +1,4 @@
+# file: /workspace/recon-platform/recon_engine/compact.py
+# hypothesis_version: 6.138.16
+
+[-1.0, 0.0, 0.01, 0.3, 0.5, 0.7, 0.8, 1.0, 'A', 'B', 'Root', 'T', '__main__', 'confirm', 'gen', 'inhibit_confirm', 'inhibit_request', 'por', 'request', 'ret', 'script', 'sub', 'sur', 'terminal', 'wait']

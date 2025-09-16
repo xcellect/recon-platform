@@ -352,7 +352,9 @@ class TestReCoNSequences:
                     
                 # Auto-confirm terminals
                 if graph.get_node(node_id).state == ReCoNState.WAITING:
-                    graph.get_node(f"T{node_id}").state = ReCoNState.CONFIRMED
+                    terminal = graph.get_node(f"T{node_id}")
+                    terminal.state = ReCoNState.CONFIRMED
+                    terminal.activation = 1.0  # Set activation for proper propagation
         
         # Should execute in exact order
         assert execution_order == ["A", "B", "C", "D", "E"]

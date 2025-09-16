@@ -1,0 +1,4 @@
+# file: /workspace/recon-platform/recon_engine/messages.py
+# hypothesis_version: 6.138.16
+
+[-1.0, 0.0, 0.5, 0.8, 1.0, 'HybridMessage', 'ReCoNMessage', 'activation', 'auto', 'confirm', 'continuous', 'discrete', 'embedding', 'explicit', 'fail', 'hybrid', 'inhibit_confirm', 'inhibit_request', 'link_type', 'metadata', 'probability', 'request', 'source', 'target', 'threshold', 'type', 'unknown', 'wait']

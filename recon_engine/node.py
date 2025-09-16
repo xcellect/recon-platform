@@ -183,7 +183,6 @@ class ReCoNNode:
             
         # Aggregate activations for this link type
         total = 0.0
-        has_confirm = False
         has_inhibit = False
         
         for msg in self.incoming_messages[link_type]:
@@ -192,18 +191,27 @@ class ReCoNNode:
             elif msg.type == MessageType.INHIBIT_CONFIRM and link_type == "ret":
                 has_inhibit = True
             elif msg.type == MessageType.REQUEST and link_type == "sub":
-                total = max(total, 1.0)  # Request signal
+                # Requests are binary in explicit mode
+                total = max(total, 1.0)
             elif msg.type == MessageType.CONFIRM and link_type == "sur":
-                has_confirm = True  # Any confirm message should trigger confirmation
+                # Use the provided activation magnitude for confirmations
+                try:
+                    val = msg.activation.item() if hasattr(msg.activation, 'numel') and msg.activation.numel() == 1 else float(msg.activation)
+                except Exception:
+                    val = 1.0
+                total = max(total, val)
             elif msg.type == MessageType.WAIT and link_type == "sur":
-                total = max(total, 0.01)  # Wait signal (small positive)
+                # Preserve small positive wait activation if provided
+                try:
+                    val = msg.activation.item() if hasattr(msg.activation, 'numel') and msg.activation.numel() == 1 else float(msg.activation)
+                except Exception:
+                    val = 0.01
+                total = max(total, val)
         
         # Handle special cases
         if has_inhibit:
             total = -1.0  # Inhibition overrides everything
-        elif has_confirm:
-            total = 1.0  # Confirm overrides wait signals
-        # total already set for other message types above
+        # Otherwise, use aggregated total (which already reflects magnitudes)
                     
         return total
     
@@ -233,13 +241,14 @@ class ReCoNNode:
         is_ret_inhibited = (isinstance(ret_activation, torch.Tensor) and ret_activation.sum() < 0) or \
                           (isinstance(ret_activation, (int, float)) and ret_activation < 0)
         
-        # Check if child confirmed (sur >= 1) 
-        child_confirmed = (isinstance(sur_activation, torch.Tensor) and sur_activation.sum() >= 1) or \
-                         (isinstance(sur_activation, (int, float)) and sur_activation >= 1)
+        # Check if child confirmed using transition threshold (supports continuous sur activations)
+        thr = self.transition_threshold
+        child_confirmed = (isinstance(sur_activation, torch.Tensor) and sur_activation.sum() >= thr) or \
+                         (isinstance(sur_activation, (int, float)) and sur_activation >= thr)
         
-        # Check if children still waiting (sur > 0 but < 1)
-        children_waiting = (isinstance(sur_activation, torch.Tensor) and 0 < sur_activation.sum() < 1) or \
-                          (isinstance(sur_activation, (int, float)) and 0 < sur_activation < 1)
+        # Check if children still waiting (0 < sur < threshold)
+        children_waiting = (isinstance(sur_activation, torch.Tensor) and 0 < sur_activation.sum() < thr) or \
+                          (isinstance(sur_activation, (int, float)) and 0 < sur_activation < thr)
         
         # No children waiting (sur <= 0)
         no_children_waiting = (isinstance(sur_activation, torch.Tensor) and sur_activation.sum() <= 0) or \
@@ -257,12 +266,17 @@ class ReCoNNode:
             elif old_state == ReCoNState.INACTIVE and is_requested:
                 # Terminal goes directly to measurement when requested
                 measurement = self.measure()
-                if measurement > self.transition_threshold:  # Threshold from paper
+                # Use measurement value as activation magnitude
+                try:
+                    meas_val = measurement.item() if hasattr(measurement, 'numel') and measurement.numel() == 1 else float(measurement)
+                except Exception:
+                    meas_val = 0.0
+                if meas_val > self.transition_threshold:  # Threshold from paper
                     self.state = ReCoNState.CONFIRMED
-                    self.activation = 1.0
+                    self.activation = meas_val
                 else:
                     self.state = ReCoNState.FAILED
-                    self.activation = 0.0
+                    self.activation = meas_val
             # Terminal states persist briefly to allow message propagation
             elif old_state in [ReCoNState.CONFIRMED, ReCoNState.FAILED]:
                 if not is_requested:

@@ -105,14 +105,14 @@ class EfficientHierarchicalHypothesisManager:
         """Add neural terminals for action/value prediction"""
         # CNN terminal for action probabilities (original approach)
         self.cnn_terminal = CNNValidActionTerminal("cnn_terminal", use_gpu=True)
-        self.graph.nodes["cnn_terminal"] = self.cnn_terminal
+        self.graph.add_node(self.cnn_terminal)
         self.graph.add_link("frame_change_hypothesis", "cnn_terminal", "sub", weight=1.0)
         
         # ResNet terminal for action values (BlindSquirrel approach)
         self.resnet_terminal = ResNetActionValueTerminal("resnet_terminal")
         if torch.cuda.is_available():
             self.resnet_terminal.to_device('cuda')
-        self.graph.nodes["resnet_terminal"] = self.resnet_terminal
+        self.graph.add_node(self.resnet_terminal)
         self.graph.add_link("frame_change_hypothesis", "resnet_terminal", "sub", weight=1.0)
     
     def extract_objects_from_frame(self, frame: torch.Tensor) -> List[dict]:

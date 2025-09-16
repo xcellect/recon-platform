@@ -124,22 +124,23 @@ class ReCoNArcAngel:
         
         from recon_engine.node import ReCoNState
         
-        # AIRTIGHT AVAILABILITY: Set unavailable actions to FAILED
-        # The key insight is that get_best_action will filter at selection time
+        # PURE RECON AVAILABILITY: Set root→child sub weight to ≈0 for unavailable actions
+        # This defers requests rather than forcing FAILED state, maintaining pure ReCoN semantics
         for harness_action, node_id in action_mapping.items():
             if harness_action not in available_names:
-                if node_id in self.hypothesis_manager.graph.nodes:
-                    self.hypothesis_manager.graph.nodes[node_id].state = ReCoNState.FAILED
-                    self.hypothesis_manager.graph.nodes[node_id].activation = -1.0
-                    
-                    # Also fail all regions if ACTION6 not available
-                    if harness_action == "ACTION6":
-                        for region_y in range(self.hypothesis_manager.regions_per_dim):
-                            for region_x in range(self.hypothesis_manager.regions_per_dim):
-                                region_id = f"region_{region_y}_{region_x}"
-                                if region_id in self.hypothesis_manager.graph.nodes:
-                                    self.hypothesis_manager.graph.nodes[region_id].state = ReCoNState.FAILED
-                                    self.hypothesis_manager.graph.nodes[region_id].activation = -1.0
+                # Set sub link weight from root to unavailable action to near zero
+                for link in self.hypothesis_manager.graph.get_links(source="frame_change_hypothesis", target=node_id):
+                    if link.type == "sub":
+                        link.weight = 1e-6  # Near zero but not exactly zero to avoid division issues
+                
+                # Also set region weights to near zero if ACTION6 not available
+                if harness_action == "ACTION6":
+                    for region_y in range(self.hypothesis_manager.regions_per_dim):
+                        for region_x in range(self.hypothesis_manager.regions_per_dim):
+                            region_id = f"region_{region_y}_{region_x}"
+                            for link in self.hypothesis_manager.graph.get_links(source="action_click", target=region_id):
+                                if link.type == "sub":
+                                    link.weight = 1e-6
     
     def _convert_to_game_action(self, action_type: str, coords: Optional[Tuple[int, int]] = None) -> Any:
         """
@@ -182,8 +183,16 @@ class ReCoNArcAngel:
         except ImportError:
             # Fallback for testing - create mock object
             class MockGameAction:
-                def __init__(self, name):
-                    self.name = name
+                def __init__(self, action_type):
+                    self.name = action_type
+                    # Convert internal action names to harness format
+                    if action_type.startswith("action_"):
+                        action_num = action_type.split("_")[1]
+                        self.action_type = f"ACTION{action_num}"
+                    elif action_type == "action_click":
+                        self.action_type = "ACTION6"
+                    else:
+                        self.action_type = action_type.upper()
                     self.reasoning = ""
                     self.data = {}
                 def set_data(self, data):
@@ -294,6 +303,8 @@ class ReCoNArcAngel:
             available_actions=latest_frame.available_actions if hasattr(latest_frame, 'available_actions') else None
         )
         
+        
+        
         if best_action is None:
             # Fallback to first available action or ACTION1
             if hasattr(latest_frame, 'available_actions') and latest_frame.available_actions:
@@ -303,6 +314,13 @@ class ReCoNArcAngel:
                     action_name = first_available.name.lower()
                     if action_name.startswith('action'):
                         best_action = action_name.replace('action', 'action_')
+                    else:
+                        best_action = "action_1"
+                elif isinstance(first_available, str):
+                    # Handle string action names like "ACTION2"
+                    if first_available.startswith('ACTION'):
+                        action_num = first_available.replace('ACTION', '')
+                        best_action = f"action_{action_num}"
                     else:
                         best_action = "action_1"
                 else:

@@ -47,6 +47,9 @@ class HypothesisManager:
         self.grid_size = grid_size
         self.regions_per_dim = grid_size // region_size
         
+        # Cache coordinate probabilities for argmax selection
+        self.cached_coord_probs = None
+        
         self._built = False
         
     def build_structure(self) -> 'HypothesisManager':
@@ -71,16 +74,21 @@ class HypothesisManager:
         # Root hypothesis - represents the overall frame change detection task
         self.graph.add_node("frame_change_hypothesis", node_type="script")
         
-        # Individual action hypotheses as TERMINAL nodes (ACTION1-ACTION5)
-        # This ensures they can confirm/succeed in ReCoN without needing children
+        # Individual action hypotheses as SCRIPT nodes with terminal children (ACTION1-ACTION5)
+        # This follows the plan's preference for scripts with terminal children
         for i in range(1, 6):
             action_id = f"action_{i}"
-            self.graph.add_node(action_id, node_type="terminal")
+            self.graph.add_node(action_id, node_type="script")
             self.graph.add_link("frame_change_hypothesis", action_id, "sub", weight=1.0)
             
+            # Each action script has a terminal child for confirmation
+            terminal_id = f"{action_id}_terminal"
+            self.graph.add_node(terminal_id, node_type="terminal")
+            self.graph.add_link(action_id, terminal_id, "sub", weight=1.0)
+            
             # Set measurement function to always confirm (action is always possible)
-            action_node = self.graph.get_node(action_id)
-            action_node.measurement_fn = lambda env=None: 1.0
+            terminal_node = self.graph.get_node(terminal_id)
+            terminal_node.measurement_fn = lambda env=None: 1.0
         
         # Click action hypothesis as SCRIPT with region children (ACTION6)
         self.graph.add_node("action_click", node_type="script")
@@ -90,7 +98,7 @@ class HypothesisManager:
         """Add CNN terminal for action/coordinate prediction"""
         # Create and integrate CNN terminal with GPU acceleration
         self.cnn_terminal = CNNValidActionTerminal("cnn_terminal", use_gpu=True)
-        self.graph.nodes["cnn_terminal"] = self.cnn_terminal
+        self.graph.add_node(self.cnn_terminal)
         
         # Connect to root for global frame analysis
         self.graph.add_link("frame_change_hypothesis", "cnn_terminal", "sub", weight=1.0)
@@ -106,7 +114,7 @@ class HypothesisManager:
                 # Set measurement function to confirm based on region score
                 # This will be updated dynamically based on CNN coordinate probabilities
                 region_node = self.graph.get_node(region_id)
-                region_node.measurement_fn = lambda env=None: 0.9  # Default high confirmation (above 0.8 threshold)
+                region_node.measurement_fn = lambda env=None: 1.0  # Set to 1.0 so sur equals region weight directly
     
     def update_weights_from_frame(self, frame: torch.Tensor):
         """
@@ -127,6 +135,9 @@ class HypothesisManager:
         
         action_probs = result["action_probabilities"]
         coord_probs = result["coordinate_probabilities"]
+        
+        # Cache coordinate probabilities for argmax selection
+        self.cached_coord_probs = coord_probs
         
         # Update action hypothesis weights (ACTION1-ACTION5)
         for i in range(5):
@@ -267,6 +278,10 @@ class HypothesisManager:
             # AIRTIGHT AVAILABILITY: Skip if not in allowed actions
             if available_actions and action_id not in allowed_actions:
                 continue
+            
+            # PURE RECON AVAILABILITY: Skip if effectively unavailable due to low sub weight
+            if self._is_action_effectively_unavailable(action_id):
+                continue
                 
             node = self.graph.nodes[action_id]
             state_score = state_priority.get(node.state.name, 0)
@@ -292,6 +307,9 @@ class HypothesisManager:
         if "action_click" in self.graph.nodes:
             # AIRTIGHT AVAILABILITY: Skip if not in allowed actions
             if available_actions and "action_click" not in allowed_actions:
+                pass  # Skip click action entirely
+            # PURE RECON AVAILABILITY: Skip if effectively unavailable due to low sub weight
+            elif self._is_action_effectively_unavailable("action_click"):
                 pass  # Skip click action entirely
             else:
                 click_node = self.graph.nodes["action_click"]
@@ -320,6 +338,10 @@ class HypothesisManager:
                                 if region_id not in self.graph.nodes:
                                     continue
                                     
+                                # PURE RECON AVAILABILITY: Skip if effectively unavailable due to low sub weight
+                                if self._is_region_effectively_unavailable(region_id):
+                                    continue
+                                
                                 region_node = self.graph.nodes[region_id]
                                 region_state_score = state_priority.get(region_node.state.name, 0)
                                 
@@ -333,10 +355,8 @@ class HypothesisManager:
                                 
                                 if region_total_score > best_region_score:
                                     best_region_score = region_total_score
-                                    # Convert region coordinates to pixel coordinates (center of region)
-                                    pixel_y = region_y * self.region_size + self.region_size // 2
-                                    pixel_x = region_x * self.region_size + self.region_size // 2
-                                    best_region_coords = (pixel_y, pixel_x)
+                                    # Get argmax coordinate within the region from cached CNN probabilities
+                                    best_region_coords = self._get_argmax_in_region(region_y, region_x)
                         
                         if best_region_coords is not None:
                             best_score = click_total_score
@@ -348,6 +368,76 @@ class HypothesisManager:
             return None, None
         
         return best_action, best_coords
+    
+    def _is_action_effectively_unavailable(self, action_id: str) -> bool:
+        """
+        Check if an action is effectively unavailable due to very low sub weight.
+        
+        This supports pure ReCoN semantics where unavailable actions have near-zero
+        sub weights instead of being set to FAILED state.
+        
+        Args:
+            action_id: The action node ID to check
+            
+        Returns:
+            True if the action has a very low sub weight (< 1e-5), False otherwise
+        """
+        for link in self.graph.get_links(source="frame_change_hypothesis", target=action_id):
+            if link.type == "sub" and link.weight < 1e-5:
+                return True
+        return False
+    
+    def _is_region_effectively_unavailable(self, region_id: str) -> bool:
+        """
+        Check if a region is effectively unavailable due to very low sub weight.
+        
+        Args:
+            region_id: The region node ID to check
+            
+        Returns:
+            True if the region has a very low sub weight (< 1e-5), False otherwise
+        """
+        for link in self.graph.get_links(source="action_click", target=region_id):
+            if link.type == "sub" and link.weight < 1e-5:
+                return True
+        return False
+    
+    def _get_argmax_in_region(self, region_y: int, region_x: int) -> Tuple[int, int]:
+        """
+        Get argmax coordinate within a specific region from cached coordinate probabilities.
+        
+        Args:
+            region_y: Region Y index
+            region_x: Region X index
+            
+        Returns:
+            Tuple of (pixel_y, pixel_x) coordinates
+        """
+        if self.cached_coord_probs is None:
+            # Fallback to center if no cached probabilities
+            pixel_y = region_y * self.region_size + self.region_size // 2
+            pixel_x = region_x * self.region_size + self.region_size // 2
+            return (pixel_y, pixel_x)
+        
+        # Get region bounds
+        y_start = region_y * self.region_size
+        y_end = min(y_start + self.region_size, self.grid_size)
+        x_start = region_x * self.region_size  
+        x_end = min(x_start + self.region_size, self.grid_size)
+        
+        # Extract region probabilities
+        region_probs = self.cached_coord_probs[y_start:y_end, x_start:x_end]
+        
+        # Find argmax within region
+        flat_idx = region_probs.argmax().item()
+        local_y = flat_idx // region_probs.shape[1]
+        local_x = flat_idx % region_probs.shape[1]
+        
+        # Convert to global coordinates
+        global_y = y_start + local_y
+        global_x = x_start + local_x
+        
+        return (global_y, global_x)
     
     def reset(self):
         """Reset the graph state for a new evaluation"""

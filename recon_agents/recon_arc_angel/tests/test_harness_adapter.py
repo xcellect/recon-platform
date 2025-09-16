@@ -230,18 +230,19 @@ class ReCoNArcAngel:
         # Set unavailable actions to FAILED
         for harness_action, node_id in action_mapping.items():
             if harness_action not in available_actions:
-                if node_id in self.hypothesis_manager.graph.nodes:
-                    self.hypothesis_manager.graph.nodes[node_id].state = ReCoNState.FAILED
-                    self.hypothesis_manager.graph.nodes[node_id].activation = -1.0
-                    
-                    # Also fail all regions if ACTION6 not available
-                    if harness_action == "ACTION6":
-                        for region_y in range(self.hypothesis_manager.regions_per_dim):
-                            for region_x in range(self.hypothesis_manager.regions_per_dim):
-                                region_id = f"region_{region_y}_{region_x}"
-                                if region_id in self.hypothesis_manager.graph.nodes:
-                                    self.hypothesis_manager.graph.nodes[region_id].state = ReCoNState.FAILED
-                                    self.hypothesis_manager.graph.nodes[region_id].activation = -1.0
+                # Set sub link weight from root to unavailable action to near zero
+                for link in self.hypothesis_manager.graph.get_links(source="frame_change_hypothesis", target=node_id):
+                    if link.type == "sub":
+                        link.weight = 1e-6  # Near zero but not exactly zero to avoid division issues
+                
+                # Also set region weights to near zero if ACTION6 not available
+                if harness_action == "ACTION6":
+                    for region_y in range(self.hypothesis_manager.regions_per_dim):
+                        for region_x in range(self.hypothesis_manager.regions_per_dim):
+                            region_id = f"region_{region_y}_{region_x}"
+                            for link in self.hypothesis_manager.graph.get_links(source="action_click", target=region_id):
+                                if link.type == "sub":
+                                    link.weight = 1e-6
     
     def _convert_to_game_action(self, action_type: str, coords: Optional[tuple] = None) -> MockGameAction:
         """Convert internal action to GameAction"""
@@ -308,13 +309,21 @@ class ReCoNArcAngel:
         for _ in range(5):  # Run several steps
             self.hypothesis_manager.propagate_step()
         
-        # Get best action
-        best_action, best_coords = self.hypothesis_manager.get_best_action()
+        # Get best action with availability enforcement
+        best_action, best_coords = self.hypothesis_manager.get_best_action(
+            available_actions=latest_frame.available_actions
+        )
         
         if best_action is None:
             # Fallback to first available action
             if latest_frame.available_actions:
-                return self._convert_to_game_action("action_1")
+                # Convert first available action like "ACTION2" to "action_2"
+                first_available = latest_frame.available_actions[0]
+                if first_available.startswith('ACTION'):
+                    action_num = first_available.replace('ACTION', '')
+                    best_action = f"action_{action_num}"
+                else:
+                    best_action = "action_1"
             else:
                 return MockGameActionEnum.RESET
         

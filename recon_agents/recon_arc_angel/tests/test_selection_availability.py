@@ -24,7 +24,7 @@ def test_hypothesis_manager_build():
     
     stats = manager.get_stats()
     assert stats["built"] is True
-    assert stats["total_nodes"] == 7 + 1 + 64  # root + 6 actions + cnn + 64 regions
+    assert stats["total_nodes"] == 1 + 6 + 5 + 1 + 64  # root + 6 action scripts + 5 action terminals + cnn + 64 regions
     assert "action_1" in manager.graph.nodes
     assert "action_click" in manager.graph.nodes
     assert "region_0_0" in manager.graph.nodes

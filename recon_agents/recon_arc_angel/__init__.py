@@ -17,12 +17,14 @@ from .hypothesis_manager import HypothesisManager
 from .learning_manager import LearningManager
 from .region_aggregator import RegionAggregator
 from .efficient_hierarchy_manager import EfficientHierarchicalHypothesisManager
+from .production_agent import ProductionReCoNArcAngel
 
-# Export production-ready efficient implementation (primary) and working reference implementations
+# Export production-ready agent and components, plus reference implementations
 __all__ = [
+    'ProductionReCoNArcAngel',  # 🚀 MAIN: Complete production agent with dual training
     'EfficientHierarchicalHypothesisManager',  # 🚀 PRIMARY: REFINED_PLAN + BlindSquirrel efficiency
-    'ReCoNArcAngel',  # Working simplified agent (reference baseline)
-    'HypothesisManager',  # Working simplified manager (reference baseline)
-    'LearningManager',  # Dual training component (CNN + ResNet)
-    'RegionAggregator',  # Working region aggregation (reference baseline)
+    'LearningManager',  # 🎓 Dual training component (CNN + ResNet)
+    'ReCoNArcAngel',  # 📚 Reference: Simplified agent baseline
+    'HypothesisManager',  # 📚 Reference: Simplified manager baseline
+    'RegionAggregator',  # 📚 Reference: Region aggregation baseline
 ]

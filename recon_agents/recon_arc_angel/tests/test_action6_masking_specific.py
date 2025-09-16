@@ -202,21 +202,21 @@ class TestMaskingCombinations:
         agent.hypothesis_manager.reset()
         agent._apply_available_actions_mask(frame.available_actions)
         
-        # Check that action_click is FAILED
-        click_node = agent.hypothesis_manager.graph.nodes['action_click']
-        assert click_node.state == ReCoNState.FAILED
+        # Check that action_click is effectively unavailable (pure ReCoN semantics)
+        assert agent.hypothesis_manager._is_action_effectively_unavailable('action_click'), \
+            "action_click should be effectively unavailable due to low sub weight"
         
-        # Check that some regions are FAILED
-        region_states = []
+        # Check that some regions are effectively unavailable
+        unavailable_regions = 0
         for region_y in range(3):  # Check first few regions
             for region_x in range(3):
                 region_id = f'region_{region_y}_{region_x}'
                 if region_id in agent.hypothesis_manager.graph.nodes:
-                    region_node = agent.hypothesis_manager.graph.nodes[region_id]
-                    region_states.append(region_node.state)
+                    if agent.hypothesis_manager._is_region_effectively_unavailable(region_id):
+                        unavailable_regions += 1
         
-        # All checked regions should be FAILED when ACTION6 not available
-        assert all(state == ReCoNState.FAILED for state in region_states)
+        # All checked regions should be effectively unavailable when ACTION6 not available
+        assert unavailable_regions == 9, f"Expected 9 unavailable regions, got {unavailable_regions}"
 
 class TestMaskingEdgeCases:
     """Test edge cases for action masking"""
@@ -431,9 +431,9 @@ class TestMaskingRobustness:
             node = agent.hypothesis_manager.graph.nodes[action_id]
             final_states[action_id] = node.state
         
-        # ACTION3 should be available (not FAILED)
-        assert final_states['action_3'] != ReCoNState.FAILED, \
-            f"ACTION3 should be available, but final state is {final_states['action_3']}"
+        # ACTION3 should be available (not effectively unavailable due to low sub weight)
+        assert not agent.hypothesis_manager._is_action_effectively_unavailable('action_3'), \
+            f"ACTION3 should be available, but it's effectively unavailable due to low sub weight"
         
         # Other actions should remain FAILED or at least not be the best choice
         best_action, _ = agent.hypothesis_manager.get_best_action(available_actions=['ACTION3'])

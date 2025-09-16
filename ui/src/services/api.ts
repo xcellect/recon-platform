@@ -1,6 +1,6 @@
 // API client for ReCoN Platform backend
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8001';
 
 export interface NodeCreateRequest {
   node_id: string;
@@ -221,17 +221,9 @@ class ReCoNAPI {
     return response.json();
   }
 
-  async exportNetwork(networkId: string, format: string = 'json') {
-    const response = await fetch(`${this.baseUrl}/networks/${networkId}/export?format=${format}`);
+  // exportNetwork removed - all exports are client-side now
 
-    if (!response.ok) {
-      throw new Error(`Failed to export network: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  async importNetwork(data: any, networkId?: string) {
+  async importNetwork(data: any) {
     const response = await fetch(`${this.baseUrl}/networks/import`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -1,7 +1,7 @@
 // Zustand store for ReCoN network state management
 
 import { create } from 'zustand';
-import { ReCoNNetwork, ReCoNNode, ReCoNLink, NetworkState, ExecutionState } from '../types/recon';
+import type { ReCoNNetwork, ReCoNNode, ReCoNLink, NetworkState, ExecutionState } from '../types/recon';
 import { reconAPI } from '../services/api';
 
 // Local storage utilities for node positions
@@ -44,15 +44,17 @@ interface NetworkStore extends NetworkState {
   loadNetwork: (id: string) => Promise<void>;
   saveNetwork: () => Promise<void>;
   deleteNetwork: (id: string) => Promise<void>;
+  syncServerIfDirty: () => Promise<void>;
+  exportLocalGraph: () => any;
 
   // Node operations
-  addNode: (node: Omit<ReCoNNode, 'id'>) => Promise<void>;
+  addNode: (node: Omit<ReCoNNode, 'id'>) => void;
   updateNode: (id: string, updates: Partial<ReCoNNode>) => void;
   deleteNode: (id: string) => void;
   selectNode: (node: ReCoNNode | null) => void;
 
   // Link operations
-  addLink: (link: Omit<ReCoNLink, 'id'>) => Promise<void>;
+  addLink: (link: Omit<ReCoNLink, 'id'>) => void;
   updateLink: (id: string, updates: Partial<ReCoNLink>) => void;
   deleteLink: (id: string) => void;
   selectLink: (link: ReCoNLink | null) => void;
@@ -88,10 +90,23 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
   // Network operations
   createNetwork: async (id?: string) => {
+    // Optimistic: show empty network immediately
+    const optimisticId = id || `net-${Math.random().toString(36).slice(2, 8)}`;
+    set({
+      currentNetwork: {
+        id: optimisticId,
+        nodes: [],
+        links: [],
+        stepCount: 0,
+        requestedRoots: [],
+      },
+      isDirty: false,
+    });
+
     try {
       const response = await reconAPI.createNetwork(id);
       const storedPositions = getNetworkPositions(response.network_id);
-      
+
       const network: ReCoNNetwork = {
         id: response.network_id,
         nodes: response.nodes.map(node => ({
@@ -99,7 +114,6 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
           type: node.node_type as any,
           state: node.state as any,
           activation: node.activation,
-          // Restore position from localStorage or default to (0,0) for layout
           position: storedPositions[node.node_id] || { x: 0, y: 0 },
         })),
         links: response.links.map(link => ({
@@ -115,6 +129,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
 
       set({ currentNetwork: network, isDirty: false });
     } catch (error) {
+      // Roll back optimistic network
+      set({ currentNetwork: null });
       console.error('Failed to create network:', error);
       throw error;
     }
@@ -164,8 +180,8 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
     const { currentNetwork } = get();
     if (!currentNetwork) return;
 
-    // Network is automatically saved via API calls
-    set({ isDirty: false });
+    // Saving is local-only; keep dirty until syncServerIfDirty is called
+    set({ isDirty: true });
   },
 
   deleteNetwork: async (id: string) => {
@@ -182,36 +198,27 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   // Node operations
-  addNode: async (nodeData: any) => {
+  addNode: (nodeData: any) => {
     const { currentNetwork } = get();
     if (!currentNetwork) return;
 
-    try {
-      const response = await reconAPI.createNode(currentNetwork.id, {
-        node_id: nodeData.id,
-        node_type: nodeData.type,
-      });
+    const newNode: ReCoNNode = {
+      id: nodeData.id,
+      type: nodeData.type,
+      state: 'inactive' as any,
+      activation: 0,
+      mode: nodeData.mode,
+      position: nodeData.position,
+    };
 
-      const newNode: ReCoNNode = {
-        id: response.node_id,
-        type: response.node_type,
-        state: response.state as any,
-        activation: response.activation,
-        mode: nodeData.mode,
-        position: nodeData.position,
-      };
-
-      set(state => ({
-        currentNetwork: state.currentNetwork ? {
-          ...state.currentNetwork,
-          nodes: [...state.currentNetwork.nodes, newNode],
-        } : null,
-        isDirty: true,
-      }));
-    } catch (error) {
-      console.error('Failed to add node:', error);
-      throw error;
-    }
+    // Add node locally - no server calls
+    set(state => ({
+      currentNetwork: state.currentNetwork ? {
+        ...state.currentNetwork,
+        nodes: [...state.currentNetwork.nodes, newNode],
+      } : null,
+      isDirty: true,
+    }));
   },
 
   updateNode: (id: string, updates: Partial<ReCoNNode>) => {
@@ -276,37 +283,67 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   // Link operations
-  addLink: async (linkData: Omit<ReCoNLink, 'id'>) => {
+  addLink: (linkData: Omit<ReCoNLink, 'id'>) => {
     const { currentNetwork } = get();
     if (!currentNetwork) return;
 
-    try {
-      const response = await reconAPI.createLink(currentNetwork.id, {
-        source: linkData.source,
-        target: linkData.target,
-        link_type: linkData.type,
+    const newLink: ReCoNLink = {
+      id: `${linkData.source}-${linkData.target}-${linkData.type}`,
+      source: linkData.source,
+      target: linkData.target,
+      type: linkData.type as any,
+      weight: linkData.weight,
+    };
+
+    // Determine reciprocal for bidirectional pairs
+    let reciprocal: ReCoNLink | null = null;
+    if (linkData.type === 'sub') {
+      reciprocal = {
+        id: `${linkData.target}-${linkData.source}-sur`,
+        source: linkData.target,
+        target: linkData.source,
+        type: 'sur',
         weight: linkData.weight,
-      });
+      } as ReCoNLink;
+    } else if (linkData.type === 'sur') {
+      reciprocal = {
+        id: `${linkData.target}-${linkData.source}-sub`,
+        source: linkData.target,
+        target: linkData.source,
+        type: 'sub',
+        weight: linkData.weight,
+      } as ReCoNLink;
+    } else if (linkData.type === 'por') {
+      reciprocal = {
+        id: `${linkData.target}-${linkData.source}-ret`,
+        source: linkData.target,
+        target: linkData.source,
+        type: 'ret',
+        weight: linkData.weight,
+      } as ReCoNLink;
+    } else if (linkData.type === 'ret') {
+      reciprocal = {
+        id: `${linkData.target}-${linkData.source}-por`,
+        source: linkData.target,
+        target: linkData.source,
+        type: 'por',
+        weight: linkData.weight,
+      } as ReCoNLink;
+    }
 
-      const newLink: ReCoNLink = {
-        id: `${response.source}-${response.target}-${response.link_type}`,
-        source: response.source,
-        target: response.target,
-        type: response.link_type as any,
-        weight: response.weight,
-      };
-
-      set(state => ({
+    // Add both links locally - no server calls
+    set(state => {
+      const existing = new Set(state.currentNetwork?.links.map(l => l.id));
+      const newLinks: ReCoNLink[] = [newLink];
+      if (reciprocal && !existing.has(reciprocal.id)) newLinks.push(reciprocal);
+      return {
         currentNetwork: state.currentNetwork ? {
           ...state.currentNetwork,
-          links: [...state.currentNetwork.links, newLink],
+          links: [...state.currentNetwork.links, ...newLinks],
         } : null,
         isDirty: true,
-      }));
-    } catch (error) {
-      console.error('Failed to add link:', error);
-      throw error;
-    }
+      };
+    });
   },
 
   updateLink: (id: string, updates: Partial<ReCoNLink>) => {
@@ -357,10 +394,11 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   executeScript: async (rootNodeId: string, maxSteps = 100) => {
-    const { currentNetwork } = get();
+    const { currentNetwork, syncServerIfDirty } = get();
     if (!currentNetwork) return;
 
     try {
+      await syncServerIfDirty();
       const result = await reconAPI.executeScript(currentNetwork.id, {
         root_node: rootNodeId,
         max_steps: maxSteps,
@@ -378,7 +416,7 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
         } : null,
       }));
 
-      return result;
+      // result intentionally not returned to keep signature Promise<void>
     } catch (error) {
       console.error('Failed to execute script:', error);
       throw error;
@@ -386,10 +424,11 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   propagateStep: async () => {
-    const { currentNetwork } = get();
+    const { currentNetwork, syncServerIfDirty } = get();
     if (!currentNetwork) return;
 
     try {
+      await syncServerIfDirty();
       const result = await reconAPI.propagateStep(currentNetwork.id);
       set(state => ({
         currentNetwork: state.currentNetwork ? {
@@ -404,10 +443,11 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
   },
 
   resetNetwork: async () => {
-    const { currentNetwork } = get();
+    const { currentNetwork, syncServerIfDirty } = get();
     if (!currentNetwork) return;
 
     try {
+      await syncServerIfDirty();
       await reconAPI.resetNetwork(currentNetwork.id);
       set(state => ({
         currentNetwork: state.currentNetwork ? {
@@ -426,6 +466,78 @@ export const useNetworkStore = create<NetworkStore>((set, get) => ({
       console.error('Failed to reset network:', error);
       throw error;
     }
+  },
+
+  // Keep server and export in sync with latest UI state
+  syncServerIfDirty: async () => {
+    const state = get();
+    const currentNetwork = state.currentNetwork;
+    if (!currentNetwork || !state.isDirty) return;
+    try {
+      const exportData = {
+        nodes: currentNetwork.nodes.map(n => ({
+          id: n.id,
+          type: n.type,
+          state: n.state,
+          activation: n.activation,
+          gates: { sub: 0, sur: 0, por: 0, ret: 0, gen: 0 },
+          timing_config: {
+            timing_mode: 'discrete',
+            discrete_wait_steps: 3,
+            sequence_wait_steps: 6,
+            activation_decay_rate: 0.8,
+            activation_failure_threshold: 0.1,
+            activation_initial_level: 0.8,
+            current_waiting_activation: 0,
+          },
+        })),
+        links: currentNetwork.links.map(l => ({
+          source: l.source,
+          target: l.target,
+          type: l.type,
+          weight: l.weight,
+        })),
+        requested_roots: [],
+        step_count: 0,
+      } as any;
+
+      const res = await reconAPI.importNetwork(exportData);
+      await get().loadNetwork(res.network_id);
+      set({ isDirty: false });
+    } catch (e) {
+      console.warn('syncServerIfDirty failed; proceeding with client state only.', e);
+    }
+  },
+
+  exportLocalGraph: () => {
+    const { currentNetwork } = get();
+    if (!currentNetwork) return null;
+    return {
+      nodes: currentNetwork.nodes.map(n => ({
+        id: n.id,
+        type: n.type,
+        state: n.state,
+        activation: n.activation,
+        gates: { sub: 0, sur: 0, por: 0, ret: 0, gen: 0 },
+        timing_config: {
+          timing_mode: 'discrete',
+          discrete_wait_steps: 3,
+          sequence_wait_steps: 6,
+          activation_decay_rate: 0.8,
+          activation_failure_threshold: 0.1,
+          activation_initial_level: 0.8,
+          current_waiting_activation: 0,
+        },
+      })),
+      links: currentNetwork.links.map(l => ({
+        source: l.source,
+        target: l.target,
+        type: l.type,
+        weight: l.weight,
+      })),
+      requested_roots: [],
+      step_count: 0,
+    } as any;
   },
 
   // UI state

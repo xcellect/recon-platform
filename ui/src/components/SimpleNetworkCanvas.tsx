@@ -1,15 +1,15 @@
 // Simplified Network Canvas that actually works
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
-  Node,
-  Edge,
-  addEdge,
+  type Node,
+  type Edge,
   useNodesState,
   useEdgesState,
-  Connection,
+  type Connection,
   Controls,
   MiniMap,
   Background,
+  BackgroundVariant,
 } from 'reactflow';
 import { useNetworkStore } from '../stores/networkStore';
 import { hierarchicalLayout } from '../utils/layout';
@@ -66,100 +66,75 @@ export default function SimpleNetworkCanvas({
   const reactFlowEdges = useMemo(() => {
     if (!currentNetwork?.links) return [];
 
-    // Group links by their bidirectional pairs
-    const linkPairs = new Map<string, { primary: any; secondary?: any }>();
+    // Group links by undirected pair to create a single edge per pair
+    const pairs = new Map<string, { types: Set<string>; sub?: any; sur?: any; por?: any; ret?: any }>();
 
     currentNetwork.links.forEach(link => {
-      const key = [link.source, link.target].sort().join('-');
+      const key = [link.source, link.target].sort().join('::');
+      if (!pairs.has(key)) pairs.set(key, { types: new Set() });
+      const entry = pairs.get(key)!;
+      entry.types.add(link.type);
+      (entry as any)[link.type] = link;
+    });
 
-      if (!linkPairs.has(key)) {
-        linkPairs.set(key, { primary: link });
-      } else {
-        const existing = linkPairs.get(key);
-        if (existing) {
-          existing.secondary = link;
-        }
+    const edges: Edge[] = [];
+
+    pairs.forEach(entry => {
+      const hasHier = entry.types.has('sub') || entry.types.has('sur');
+      const hasSeq = entry.types.has('por') || entry.types.has('ret');
+
+      if (hasHier) {
+        // Orient from parent (sub source) to child (sub target) when available
+        const parent = entry.sub ? entry.sub.source : entry.sur.target;
+        const child = entry.sub ? entry.sub.target : entry.sur.source;
+        edges.push({
+          id: `${parent}-${child}-sub/sur`,
+          source: parent,
+          target: child,
+          sourceHandle: 'bottom-source',
+          targetHandle: 'top',
+          label: 'sub/sur',
+          type: 'smoothstep',
+          style: { stroke: '#1976d2', strokeWidth: 2 },
+          markerStart: { type: 'arrowclosed', color: '#1976d2' },
+          markerEnd: { type: 'arrowclosed', color: '#1976d2' },
+        } as Edge);
+      }
+
+      if (hasSeq) {
+        // Orient from predecessor (por source) to successor (por target)
+        const pred = entry.por ? entry.por.source : entry.ret.target;
+        const succ = entry.por ? entry.por.target : entry.ret.source;
+        edges.push({
+          id: `${pred}-${succ}-por/ret`,
+          source: pred,
+          target: succ,
+          sourceHandle: 'right-source',
+          targetHandle: 'left',
+          label: 'por/ret',
+          type: 'smoothstep',
+          style: { stroke: '#f57c00', strokeWidth: 2, strokeDasharray: '5,5' },
+          markerStart: { type: 'arrowclosed', color: '#f57c00' },
+          markerEnd: { type: 'arrowclosed', color: '#f57c00' },
+        } as Edge);
       }
     });
 
-    // Convert pairs to bidirectional edges
-    return Array.from(linkPairs.values()).map(({ primary, secondary }) => {
-      const isHierarchical = primary.type === 'sub' || primary.type === 'sur' ||
-                             (secondary && (secondary.type === 'sub' || secondary.type === 'sur'));
-
-      const isSequential = primary.type === 'por' || primary.type === 'ret' ||
-                           (secondary && (secondary.type === 'por' || secondary.type === 'ret'));
-
-      let label = '';
-      let sourceNode = primary.source;
-      let targetNode = primary.target;
-
-      if (isHierarchical) {
-        // For hierarchical relationships, show from parent to child
-        if (primary.type === 'sub') {
-          label = 'sub/sur';
-          sourceNode = primary.source;
-          targetNode = primary.target;
-        } else if (primary.type === 'sur') {
-          label = 'sub/sur';
-          sourceNode = primary.target;
-          targetNode = primary.source;
-        }
-      } else if (isSequential) {
-        // For sequential relationships, show from predecessor to successor
-        if (primary.type === 'por') {
-          label = 'por/ret';
-          sourceNode = primary.source;
-          targetNode = primary.target;
-        } else if (primary.type === 'ret') {
-          label = 'por/ret';
-          sourceNode = primary.target;
-          targetNode = primary.source;
-        }
-      } else {
-        // Fallback for single links
-        label = primary.type;
-        sourceNode = primary.source;
-        targetNode = primary.target;
-      }
-
-      // Determine source and target handles based on link type
-      let sourceHandle = '';
-      let targetHandle = '';
-
-      if (isHierarchical) {
-        // sub/sur links use top/bottom handles
-        sourceHandle = 'bottom-source';  // Parent connects from bottom
-        targetHandle = 'top';            // Child connects to top
-      } else if (isSequential) {
-        // por/ret links use left/right handles
-        sourceHandle = 'right-source';   // Predecessor connects from right
-        targetHandle = 'left';           // Successor connects to left
-      }
-
-      return {
-        id: `${sourceNode}-${targetNode}-${label}`,
-        source: sourceNode,
-        target: targetNode,
-        sourceHandle,
-        targetHandle,
-        label,
+    // gen or other single-direction links (rare)
+    currentNetwork.links.forEach(link => {
+      if (link.type !== 'gen') return;
+      edges.push({
+        id: `${link.source}-${link.target}-gen`,
+        source: link.source,
+        target: link.target,
+        label: 'gen',
         type: 'smoothstep',
-        style: {
-          stroke: isHierarchical ? '#1976d2' : '#f57c00',
-          strokeWidth: 2,
-          strokeDasharray: isSequential ? '5,5' : undefined
-        },
-        markerEnd: {
-          type: 'arrowclosed',
-          color: isHierarchical ? '#1976d2' : '#f57c00'
-        },
-        markerStart: {
-          type: 'arrowclosed',
-          color: isHierarchical ? '#1976d2' : '#f57c00'
-        }
-      };
+        style: { stroke: '#9e9e9e', strokeWidth: 2, strokeDasharray: '2,2' },
+        markerEnd: { type: 'arrowclosed', color: '#9e9e9e' },
+      } as Edge);
     });
+
+    return edges;
   }, [currentNetwork?.links]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -215,10 +190,19 @@ export default function SimpleNetworkCanvas({
   const onConnect = useCallback(
     (params: Connection) => {
       if (params.source && params.target) {
+        // Infer link type from the source handle position
+        let inferred: 'sub' | 'sur' | 'por' | 'ret' | 'gen' = 'sub';
+        switch (params.sourceHandle) {
+          case 'bottom-source': inferred = 'sub'; break;
+          case 'top-source': inferred = 'sur'; break;
+          case 'right-source': inferred = 'por'; break;
+          case 'left-source': inferred = 'ret'; break;
+          default: inferred = 'sub';
+        }
         addLink({
           source: params.source,
           target: params.target,
-          type: 'sub', // Default link type
+          type: inferred,
           weight: 1.0,
         });
       }
@@ -226,11 +210,11 @@ export default function SimpleNetworkCanvas({
     [addLink],
   );
 
-  const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
     onNodeSelect?.(node.id);
   }, [onNodeSelect]);
 
-  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+  const onEdgeClick = useCallback((_event: React.MouseEvent, edge: Edge) => {
     onEdgeSelect?.(edge.id);
   }, [onEdgeSelect]);
 
@@ -240,7 +224,7 @@ export default function SimpleNetworkCanvas({
   }, [onNodeSelect, onEdgeSelect]);
 
   // Handle node position changes
-  const onNodeDragStop = useCallback((event: React.MouseEvent, node: Node) => {
+  const onNodeDragStop = useCallback((_event: React.MouseEvent, node: Node) => {
     updateNode(node.id, {
       position: node.position,
     });
@@ -261,6 +245,33 @@ export default function SimpleNetworkCanvas({
         nodeTypes={nodeTypes}
         fitView
         fitViewOptions={{ padding: 0.1, includeHiddenNodes: false, minZoom: 0.5, maxZoom: 1.5 }}
+        onEdgesDelete={(eds) => {
+          const store = useNetworkStore.getState();
+          eds.forEach(e => {
+            const id = e.id || '';
+            const lastDash = id.lastIndexOf('-');
+            if (lastDash === -1) return;
+            const srcTgt = id.substring(0, lastDash); // source-target
+            const label = id.substring(lastDash + 1); // 'sub/sur' or 'por/ret' or 'gen'
+            const sep = srcTgt.indexOf('-');
+            if (sep === -1) return;
+            const source = srcTgt.substring(0, sep);
+            const target = srcTgt.substring(sep + 1);
+            if (label === 'sub/sur') {
+              store.deleteLink(`${source}-${target}-sub`);
+              store.deleteLink(`${target}-${source}-sur`);
+            } else if (label === 'por/ret') {
+              store.deleteLink(`${source}-${target}-por`);
+              store.deleteLink(`${target}-${source}-ret`);
+            } else {
+              store.deleteLink(id);
+            }
+          });
+        }}
+        onNodesDelete={(nds) => {
+          const store = useNetworkStore.getState();
+          nds.forEach(n => store.deleteNode(n.id));
+        }}
       >
         <Controls />
         <MiniMap
@@ -268,7 +279,7 @@ export default function SimpleNetworkCanvas({
           nodeStrokeColor={() => '#333'}
           nodeStrokeWidth={2}
         />
-        <Background variant="dots" gap={12} size={1} />
+        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
       </ReactFlow>
     </div>
   );

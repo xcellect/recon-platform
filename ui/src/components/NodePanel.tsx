@@ -47,7 +47,7 @@ export default function NodePanel() {
 
   const handleUpdateLink = () => {
     if (!selectedLink) return;
-
+    // Only for single links - combined links update directly via onChange
     updateLink(selectedLink.id, {
       weight: linkWeight,
     });
@@ -62,9 +62,28 @@ export default function NodePanel() {
 
   const handleDeleteLink = () => {
     if (!selectedLink) return;
-    if (!confirm(`Delete link "${selectedLink.id}"?`)) return;
+    
+    const linkPairText = selectedLink.type === 'sub/sur' ? 'sub/sur pair' :
+                        selectedLink.type === 'por/ret' ? 'por/ret pair' :
+                        `${selectedLink.type} link`;
+    
+    if (!confirm(`Delete ${linkPairText} between "${selectedLink.source}" and "${selectedLink.target}"?`)) return;
 
-    deleteLink(selectedLink.id);
+    // Handle combined link deletion
+    if (selectedLink.type === 'sub/sur') {
+      const subLink = (selectedLink as any)._subLink;
+      const surLink = (selectedLink as any)._surLink;
+      if (subLink) deleteLink(subLink.id);
+      if (surLink) deleteLink(surLink.id);
+    } else if (selectedLink.type === 'por/ret') {
+      const porLink = (selectedLink as any)._porLink;
+      const retLink = (selectedLink as any)._retLink;
+      if (porLink) deleteLink(porLink.id);
+      if (retLink) deleteLink(retLink.id);
+    } else {
+      // Single link
+      deleteLink(selectedLink.id);
+    }
   };
 
   if (!selectedNode && !selectedLink) {
@@ -256,43 +275,121 @@ export default function NodePanel() {
             </div>
           </div>
 
-          {/* Link Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Link Type
-            </label>
-            <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
-              {selectedLink.type} - {getLinkDescription(selectedLink.type)}
-            </div>
-          </div>
+          {/* Combined Link Pair Properties */}
+          {(selectedLink.type === 'sub/sur' || selectedLink.type === 'por/ret') && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Link Pair Type
+                </label>
+                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+                  {selectedLink.type} - Bidirectional {selectedLink.type === 'sub/sur' ? 'hierarchy' : 'sequence'}
+                </div>
+              </div>
 
-          {/* Link Weight */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Weight
-            </label>
-            <input
-              type="number"
-              value={linkWeight}
-              onChange={(e) => setLinkWeight(parseFloat(e.target.value) || 1.0)}
-              step="0.1"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              {/* Individual Link Properties */}
+              {selectedLink.type === 'sub/sur' && (selectedLink as any)._subLink && (selectedLink as any)._surLink && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      SUB Weight ({selectedLink.source} → {selectedLink.target})
+                    </label>
+                    <input
+                      type="number"
+                      value={(selectedLink as any)._subLink.weight}
+                      onChange={(e) => updateLink((selectedLink as any)._subLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      step="0.1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      SUR Weight ({selectedLink.target} → {selectedLink.source})
+                    </label>
+                    <input
+                      type="number"
+                      value={(selectedLink as any)._surLink.weight}
+                      onChange={(e) => updateLink((selectedLink as any)._surLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      step="0.1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedLink.type === 'por/ret' && (selectedLink as any)._porLink && (selectedLink as any)._retLink && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      POR Weight ({selectedLink.source} → {selectedLink.target})
+                    </label>
+                    <input
+                      type="number"
+                      value={(selectedLink as any)._porLink.weight}
+                      onChange={(e) => updateLink((selectedLink as any)._porLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      step="0.1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      RET Weight ({selectedLink.target} → {selectedLink.source})
+                    </label>
+                    <input
+                      type="number"
+                      value={(selectedLink as any)._retLink.weight}
+                      onChange={(e) => updateLink((selectedLink as any)._retLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      step="0.1"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Single Link Properties */}
+          {selectedLink.type !== 'sub/sur' && selectedLink.type !== 'por/ret' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Link Type
+                </label>
+                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+                  {selectedLink.type} - {getLinkDescription(selectedLink.type)}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Weight
+                </label>
+                <input
+                  type="number"
+                  value={linkWeight}
+                  onChange={(e) => setLinkWeight(parseFloat(e.target.value) || 1.0)}
+                  step="0.1"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-4 border-t border-gray-200">
-            <button
-              onClick={handleUpdateLink}
-              className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
-            >
-              Update Link
-            </button>
+            {selectedLink.type !== 'sub/sur' && selectedLink.type !== 'por/ret' && (
+              <button
+                onClick={handleUpdateLink}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              >
+                Update Link
+              </button>
+            )}
             <button
               onClick={handleDeleteLink}
               className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
             >
-              Delete
+              Delete {selectedLink.type === 'sub/sur' || selectedLink.type === 'por/ret' ? 'Pair' : 'Link'}
             </button>
           </div>
         </>

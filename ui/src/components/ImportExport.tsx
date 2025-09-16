@@ -5,10 +5,10 @@ import { useNetworkStore } from '../stores/networkStore';
 import { reconAPI } from '../services/api';
 
 export default function ImportExport() {
-  const { currentNetwork, createNetwork, loadNetwork } = useNetworkStore();
+  const { currentNetwork, loadNetwork, exportLocalGraph } = useNetworkStore();
   const [isExporting, setIsExporting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [exportFormat, setExportFormat] = useState('json');
+  // exportFormat removed - all exports are client-side now
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = async () => {
@@ -16,14 +16,18 @@ export default function ImportExport() {
 
     try {
       setIsExporting(true);
-      const data = await reconAPI.exportNetwork(currentNetwork.id, exportFormat);
+      // Use local graph state instead of server state
+      const data = exportLocalGraph();
+      if (!data) {
+        throw new Error('No network data to export');
+      }
 
       // Create and download file
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${currentNetwork.id}_${exportFormat}.json`;
+      a.download = `${currentNetwork.id}_local.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -73,31 +77,34 @@ export default function ImportExport() {
 
     try {
       setIsExporting(true);
-      const data = await reconAPI.getNetwork(currentNetwork.id);
+      const localData = exportLocalGraph();
+      if (!localData) {
+        throw new Error('No network data to export');
+      }
 
       // Convert to React Flow format
       const reactFlowData = {
-        nodes: data.nodes.map(node => ({
-          id: node.node_id,
-          type: node.node_type,
+        nodes: localData.nodes.map((node: any) => ({
+          id: node.id,
+          type: node.type,
           position: { x: 0, y: 0 }, // Would need layout
           data: {
-            label: node.node_id,
+            label: node.id,
             nodeData: {
-              id: node.node_id,
-              type: node.node_type,
+              id: node.id,
+              type: node.type,
               state: node.state,
               activation: node.activation,
             },
           },
         })),
-        edges: data.links.map(link => ({
-          id: `${link.source}-${link.target}-${link.link_type}`,
+        edges: localData.links.map((link: any) => ({
+          id: `${link.source}-${link.target}-${link.type}`,
           source: link.source,
           target: link.target,
           type: 'custom',
           data: {
-            linkType: link.link_type,
+            linkType: link.type,
             weight: link.weight,
           },
         })),
@@ -125,27 +132,30 @@ export default function ImportExport() {
 
     try {
       setIsExporting(true);
-      const data = await reconAPI.getNetwork(currentNetwork.id);
+      const localData = exportLocalGraph();
+      if (!localData) {
+        throw new Error('No network data to export');
+      }
 
       // Convert to Cytoscape format
       const cytoscapeData = {
         elements: [
-          ...data.nodes.map(node => ({
+          ...localData.nodes.map((node: any) => ({
             data: {
-              id: node.node_id,
-              label: node.node_id,
-              type: node.node_type,
+              id: node.id,
+              label: node.id,
+              type: node.type,
               state: node.state,
               activation: node.activation,
             },
           })),
-          ...data.links.map(link => ({
+          ...localData.links.map((link: any) => ({
             data: {
               id: `${link.source}-${link.target}`,
               source: link.source,
               target: link.target,
-              label: link.link_type,
-              type: link.link_type,
+              label: link.type,
+              type: link.type,
               weight: link.weight,
             },
           })),
@@ -173,7 +183,10 @@ export default function ImportExport() {
     if (!currentNetwork) return;
 
     try {
-      const data = await reconAPI.exportNetwork(currentNetwork.id, 'json');
+      const data = exportLocalGraph();
+      if (!data) {
+        throw new Error('No network data to share');
+      }
       const jsonString = JSON.stringify(data);
 
       // Copy to clipboard
@@ -236,19 +249,7 @@ export default function ImportExport() {
           </button>
         </div>
 
-        {/* Export Format Selection */}
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Format:</label>
-          <select
-            value={exportFormat}
-            onChange={(e) => setExportFormat(e.target.value)}
-            className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-          >
-            <option value="json">JSON</option>
-            <option value="graphviz">GraphViz (DOT)</option>
-            <option value="d3">D3.js</option>
-          </select>
-        </div>
+        {/* Format selection removed - all exports are client-side JSON now */}
       </div>
 
       {/* Import Section */}
@@ -286,37 +287,6 @@ export default function ImportExport() {
           <div>Nodes: <span className="font-medium">{currentNetwork.nodes.length}</span></div>
           <div>Links: <span className="font-medium">{currentNetwork.links.length}</span></div>
           <div>Steps: <span className="font-medium">{currentNetwork.stepCount}</span></div>
-        </div>
-      </div>
-
-      {/* Templates */}
-      <div className="pt-4 border-t border-gray-200">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Network Templates</h4>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => {/* Create demo hierarchical network */}}
-            className="px-3 py-2 bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 text-sm"
-          >
-            Hierarchical Demo
-          </button>
-          <button
-            onClick={() => {/* Create demo sequence network */}}
-            className="px-3 py-2 bg-green-100 text-green-800 rounded-md hover:bg-green-200 text-sm"
-          >
-            Sequence Demo
-          </button>
-          <button
-            onClick={() => {/* Create demo ARC network */}}
-            className="px-3 py-2 bg-purple-100 text-purple-800 rounded-md hover:bg-purple-200 text-sm"
-          >
-            ARC-AGI Pattern
-          </button>
-          <button
-            onClick={() => {/* Create demo mixed network */}}
-            className="px-3 py-2 bg-orange-100 text-orange-800 rounded-md hover:bg-orange-200 text-sm"
-          >
-            Mixed Structure
-          </button>
         </div>
       </div>
     </div>

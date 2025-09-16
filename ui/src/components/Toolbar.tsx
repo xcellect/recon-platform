@@ -6,10 +6,9 @@ import { ReCoNNodeType, ReCoNLinkType } from '../types/recon';
 
 interface ToolbarProps {
   onAddNode?: (type: ReCoNNodeType) => void;
-  onLayoutChange?: (layout: string) => void;
 }
 
-export default function Toolbar({ onAddNode, onLayoutChange }: ToolbarProps) {
+export default function Toolbar({ onAddNode }: ToolbarProps) {
   const {
     currentNetwork,
     createNetwork,
@@ -23,6 +22,8 @@ export default function Toolbar({ onAddNode, onLayoutChange }: ToolbarProps) {
   const [selectedNodeType, setSelectedNodeType] = useState<ReCoNNodeType>('script');
   const [selectedLinkType, setSelectedLinkType] = useState<ReCoNLinkType>('sub');
   const [networkId, setNetworkId] = useState('');
+
+  // link type selection removed; keep local for possible future use
 
   const handleCreateNetwork = async () => {
     try {
@@ -75,6 +76,8 @@ export default function Toolbar({ onAddNode, onLayoutChange }: ToolbarProps) {
   const handleAddNode = () => {
     onAddNode?.(selectedNodeType);
   };
+
+  // layout controls removed for simplicity
 
   return (
     <div className="bg-white border-b border-gray-200 p-4">
@@ -137,44 +140,9 @@ export default function Toolbar({ onAddNode, onLayoutChange }: ToolbarProps) {
           </button>
         </div>
 
-        {/* Link Type Selection */}
-        <div className="flex items-center gap-2 border-r border-gray-300 pr-4">
-          <label className="text-sm font-medium">Link Type:</label>
-          <select
-            value={selectedLinkType}
-            onChange={(e) => setSelectedLinkType(e.target.value as ReCoNLinkType)}
-            className="px-2 py-1 border border-gray-300 rounded-md text-sm"
-          >
-            <option value="sub">sub (hierarchy)</option>
-            <option value="sur">sur (response)</option>
-            <option value="por">por (sequence)</option>
-            <option value="ret">ret (return)</option>
-            <option value="gen">gen (general)</option>
-          </select>
-        </div>
+        {/* Link Type Selection removed - derived from handles */}
 
-        {/* Layout Options */}
-        <div className="flex items-center gap-2 border-r border-gray-300 pr-4">
-          <label className="text-sm font-medium">Layout:</label>
-          <button
-            onClick={() => onLayoutChange?.('hierarchical')}
-            className="px-3 py-1 bg-gray-500 text-white rounded-md text-sm hover:bg-gray-600"
-          >
-            Hierarchical
-          </button>
-          <button
-            onClick={() => onLayoutChange?.('sequence')}
-            className="px-3 py-1 bg-gray-500 text-white rounded-md text-sm hover:bg-gray-600"
-          >
-            Sequence
-          </button>
-          <button
-            onClick={() => onLayoutChange?.('force')}
-            className="px-3 py-1 bg-gray-500 text-white rounded-md text-sm hover:bg-gray-600"
-          >
-            Force
-          </button>
-        </div>
+        {/* Layout Options removed */}
 
         {/* Network Controls */}
         <div className="flex items-center gap-2">

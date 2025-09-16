@@ -171,6 +171,31 @@ class ReCoNAPI {
     return response.json();
   }
 
+  async executeNetworkDirect(networkData: any, rootNode: string, maxSteps: number = 100, terminalConfigs: any[] = []): Promise<ExecutionHistoryResponse> {
+    const requestBody = {
+      network_data: networkData,
+      root_node: rootNode,
+      max_steps: maxSteps,
+      terminal_configs: terminalConfigs
+    };
+    
+    console.log('Sending direct execution request:', requestBody);
+    
+    const response = await fetch(`${this.baseUrl}/execute-network`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Execute network failed:', response.status, errorText);
+      throw new Error(`Failed to execute network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
   async executeScriptWithHistory(networkId: string, executeData: ExecuteRequest): Promise<ExecutionHistoryResponse> {
     const response = await fetch(`${this.baseUrl}/networks/${networkId}/execute-with-history`, {
       method: 'POST',

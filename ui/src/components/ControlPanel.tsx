@@ -42,11 +42,28 @@ export default function ControlPanel({
     if (!currentNetwork || !selectedRootNode) return;
 
     try {
-      // Call the new execute-with-history endpoint
-      const response = await reconAPI.executeScriptWithHistory(currentNetwork.id, {
-        root_node: selectedRootNode,
-        max_steps: 100
-      });
+      // Get current client network state and execute directly
+      const store = useNetworkStore.getState();
+      const networkData = store.exportLocalGraph();
+      
+      if (!networkData) {
+        throw new Error('No network data to execute');
+      }
+      
+      // Configure terminals based on their activation values
+      const terminalConfigs = currentNetwork.nodes
+        .filter(node => node.type === 'terminal')
+        .map(node => ({
+          node_id: node.id,
+          measurement_type: node.activation >= 0.8 ? 'confirm' : 
+                          node.activation <= 0.2 ? 'fail' : 'default',
+          measurement_value: node.activation
+        }));
+      
+      console.log('Terminal configs:', terminalConfigs);
+      
+      // Execute the current client state directly
+      const response = await reconAPI.executeNetworkDirect(networkData, selectedRootNode, 100, terminalConfigs);
 
       // Set the execution history for playback
       setExecutionHistory(response.steps);

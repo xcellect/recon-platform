@@ -18,38 +18,66 @@ export default function NodePanel() {
   const [nodeId, setNodeId] = useState('');
   const [nodeType, setNodeType] = useState<ReCoNNodeType>('script');
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('explicit');
+  const [nodeActivation, setNodeActivation] = useState('0');
+  const [isEditing, setIsEditing] = useState(false);
 
   // Link editing state
-  const [linkWeight, setLinkWeight] = useState(1.0);
+  const [linkWeight, setLinkWeight] = useState('1.0');
+  const [subWeight, setSubWeight] = useState('1.0');
+  const [surWeight, setSurWeight] = useState('1.0');
+  const [porWeight, setPorWeight] = useState('1.0');
+  const [retWeight, setRetWeight] = useState('1.0');
 
+  // Only sync when a different node is selected, not on updates
   useEffect(() => {
     if (selectedNode) {
+      console.log('NodePanel: new node selected:', selectedNode);
       setNodeId(selectedNode.id);
       setNodeType(selectedNode.type);
       setExecutionMode(selectedNode.mode || 'explicit');
+      setNodeActivation(selectedNode.activation.toString());
+      setIsEditing(false);
     }
-  }, [selectedNode]);
+  }, [selectedNode?.id]); // Only depend on ID change, not the whole object
 
   useEffect(() => {
     if (selectedLink) {
-      setLinkWeight(selectedLink.weight);
+      setLinkWeight(selectedLink.weight.toString());
+      // Sync combined link weights
+      if (selectedLink.type === 'sub/sur') {
+        const subLink = (selectedLink as any)._subLink;
+        const surLink = (selectedLink as any)._surLink;
+        if (subLink) setSubWeight(subLink.weight.toString());
+        if (surLink) setSurWeight(surLink.weight.toString());
+      } else if (selectedLink.type === 'por/ret') {
+        const porLink = (selectedLink as any)._porLink;
+        const retLink = (selectedLink as any)._retLink;
+        if (porLink) setPorWeight(porLink.weight.toString());
+        if (retLink) setRetWeight(retLink.weight.toString());
+      }
     }
-  }, [selectedLink]);
+  }, [selectedLink?.id]); // Only sync on selection change
 
   const handleUpdateNode = () => {
     if (!selectedNode) return;
 
+    console.log('Updating node:', selectedNode.id, 'with:', { id: nodeId, type: nodeType, mode: executionMode, activation: nodeActivation });
     updateNode(selectedNode.id, {
+      id: nodeId, // Allow ID changes
       type: nodeType,
       mode: executionMode,
+      activation: parseFloat(nodeActivation) || 0,
     });
+    setIsEditing(false); // Reset editing flag after update
   };
 
   const handleUpdateLink = () => {
     if (!selectedLink) return;
     // Only for single links - combined links update directly via onChange
+    const numWeight = parseFloat(linkWeight) || 1.0;
+    console.log('Updating single link weight to:', numWeight);
     updateLink(selectedLink.id, {
-      weight: linkWeight,
+      weight: numWeight,
     });
   };
 
@@ -110,9 +138,12 @@ export default function NodePanel() {
             <input
               type="text"
               value={nodeId}
-              onChange={(e) => setNodeId(e.target.value)}
+              onChange={(e) => {
+                console.log('NodePanel: changing nodeId to:', e.target.value);
+                setIsEditing(true);
+                setNodeId(e.target.value);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              disabled // Node ID changes not implemented yet
             />
           </div>
 
@@ -123,7 +154,11 @@ export default function NodePanel() {
             </label>
             <select
               value={nodeType}
-              onChange={(e) => setNodeType(e.target.value as ReCoNNodeType)}
+              onChange={(e) => {
+                console.log('NodePanel: changing nodeType to:', e.target.value);
+                setIsEditing(true);
+                setNodeType(e.target.value as ReCoNNodeType);
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="script">Script Node</option>
@@ -140,7 +175,10 @@ export default function NodePanel() {
               </label>
               <select
                 value={executionMode}
-                onChange={(e) => setExecutionMode(e.target.value as ExecutionMode)}
+                onChange={(e) => {
+                  setIsEditing(true);
+                  setExecutionMode(e.target.value as ExecutionMode);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="explicit">Explicit (Symbolic)</option>
@@ -160,14 +198,22 @@ export default function NodePanel() {
             </div>
           </div>
 
-          {/* Activation Level (read-only) */}
+          {/* Activation Level */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Activation Level
             </label>
-            <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700 font-mono">
-              {selectedNode.activation.toFixed(3)}
-            </div>
+            <input
+              type="number"
+              value={nodeActivation}
+              onChange={(e) => {
+                console.log('NodePanel: changing activation to:', e.target.value);
+                setIsEditing(true);
+                setNodeActivation(e.target.value);
+              }}
+              step="0.001"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+            />
           </div>
 
           {/* Terminal Node Configuration */}
@@ -175,30 +221,24 @@ export default function NodePanel() {
             <div className="space-y-3 pt-4 border-t border-gray-200">
               <h4 className="text-md font-medium text-gray-800">Terminal Configuration</h4>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Measurement Function
-                </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="default">Default Measurement</option>
-                  <option value="random">Random (0.8 threshold)</option>
-                  <option value="neural">Neural Model</option>
-                  <option value="custom">Custom Function</option>
-                </select>
+              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+                <strong>Execution Behavior:</strong>
+                <ul className="mt-1 space-y-1">
+                  <li>• Activation ≥ 0.8 → Terminal confirms</li>
+                  <li>• Activation ≤ 0.2 → Terminal fails</li>
+                  <li>• 0.2 &lt; Activation &lt; 0.8 → Default (fails)</li>
+                </ul>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirmation Threshold
+                  Current Behavior
                 </label>
-                <input
-                  type="number"
-                  defaultValue="0.8"
-                  step="0.1"
-                  min="0"
-                  max="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+                  {selectedNode.activation >= 0.8 ? '✅ Will CONFIRM (activation ≥ 0.8)' :
+                   selectedNode.activation <= 0.2 ? '❌ Will FAIL (activation ≤ 0.2)' :
+                   '⚠️ Will FAIL (default behavior)'}
+                </div>
               </div>
             </div>
           )}
@@ -296,8 +336,12 @@ export default function NodePanel() {
                     </label>
                     <input
                       type="number"
-                      value={(selectedLink as any)._subLink.weight}
-                      onChange={(e) => updateLink((selectedLink as any)._subLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      value={subWeight}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Changing SUB weight to:', value);
+                        setSubWeight(value);
+                      }}
                       step="0.1"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -308,8 +352,12 @@ export default function NodePanel() {
                     </label>
                     <input
                       type="number"
-                      value={(selectedLink as any)._surLink.weight}
-                      onChange={(e) => updateLink((selectedLink as any)._surLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      value={surWeight}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Changing SUR weight to:', value);
+                        setSurWeight(value);
+                      }}
                       step="0.1"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -325,8 +373,12 @@ export default function NodePanel() {
                     </label>
                     <input
                       type="number"
-                      value={(selectedLink as any)._porLink.weight}
-                      onChange={(e) => updateLink((selectedLink as any)._porLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      value={porWeight}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Changing POR weight to:', value);
+                        setPorWeight(value);
+                      }}
                       step="0.1"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -337,14 +389,42 @@ export default function NodePanel() {
                     </label>
                     <input
                       type="number"
-                      value={(selectedLink as any)._retLink.weight}
-                      onChange={(e) => updateLink((selectedLink as any)._retLink.id, { weight: parseFloat(e.target.value) || 1.0 })}
+                      value={retWeight}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        console.log('Changing RET weight to:', value);
+                        setRetWeight(value);
+                      }}
                       step="0.1"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
               )}
+
+              {/* Update button for combined links */}
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    if (selectedLink.type === 'sub/sur') {
+                      const subLink = (selectedLink as any)._subLink;
+                      const surLink = (selectedLink as any)._surLink;
+                      if (subLink) updateLink(subLink.id, { weight: parseFloat(subWeight) || 1.0 });
+                      if (surLink) updateLink(surLink.id, { weight: parseFloat(surWeight) || 1.0 });
+                      console.log('Updated sub/sur weights:', { sub: subWeight, sur: surWeight });
+                    } else if (selectedLink.type === 'por/ret') {
+                      const porLink = (selectedLink as any)._porLink;
+                      const retLink = (selectedLink as any)._retLink;
+                      if (porLink) updateLink(porLink.id, { weight: parseFloat(porWeight) || 1.0 });
+                      if (retLink) updateLink(retLink.id, { weight: parseFloat(retWeight) || 1.0 });
+                      console.log('Updated por/ret weights:', { por: porWeight, ret: retWeight });
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                >
+                  Update Weights
+                </button>
+              </div>
             </div>
           )}
 
@@ -364,13 +444,17 @@ export default function NodePanel() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Weight
                 </label>
-                <input
-                  type="number"
-                  value={linkWeight}
-                  onChange={(e) => setLinkWeight(parseFloat(e.target.value) || 1.0)}
-                  step="0.1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <input
+                type="number"
+                value={linkWeight}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  console.log('Changing single link weight to:', value);
+                  setLinkWeight(value);
+                }}
+                step="0.1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
               </div>
             </div>
           )}

@@ -11,12 +11,7 @@ interface ToolbarProps {
 export default function Toolbar({ onAddNode }: ToolbarProps) {
   const {
     currentNetwork,
-    createNetwork,
     loadNetwork,
-    saveNetwork,
-    deleteNetwork,
-    resetNetwork,
-    isDirty,
   } = useNetworkStore();
 
   const [selectedNodeType, setSelectedNodeType] = useState<ReCoNNodeType>('script');
@@ -25,13 +20,20 @@ export default function Toolbar({ onAddNode }: ToolbarProps) {
 
   // link type selection removed; keep local for possible future use
 
-  const handleCreateNetwork = async () => {
-    try {
-      await createNetwork(networkId || undefined);
-      setNetworkId('');
-    } catch (error) {
-      console.error('Failed to create network:', error);
-    }
+  const handleCreateNewNetwork = () => {
+    // Create empty network locally
+    const newId = networkId || `network-${Date.now()}`;
+    useNetworkStore.setState({
+      currentNetwork: {
+        id: newId,
+        nodes: [],
+        links: [],
+        stepCount: 0,
+        requestedRoots: [],
+      },
+      isDirty: false,
+    });
+    setNetworkId('');
   };
 
   const handleLoadNetwork = async () => {
@@ -40,36 +42,6 @@ export default function Toolbar({ onAddNode }: ToolbarProps) {
       await loadNetwork(networkId);
     } catch (error) {
       console.error('Failed to load network:', error);
-    }
-  };
-
-  const handleSaveNetwork = async () => {
-    try {
-      await saveNetwork();
-    } catch (error) {
-      console.error('Failed to save network:', error);
-    }
-  };
-
-  const handleDeleteNetwork = async () => {
-    if (!currentNetwork) return;
-    if (!confirm(`Delete network "${currentNetwork.id}"?`)) return;
-
-    try {
-      await deleteNetwork(currentNetwork.id);
-    } catch (error) {
-      console.error('Failed to delete network:', error);
-    }
-  };
-
-  const handleResetNetwork = async () => {
-    if (!currentNetwork) return;
-    if (!confirm('Reset network to initial state?')) return;
-
-    try {
-      await resetNetwork();
-    } catch (error) {
-      console.error('Failed to reset network:', error);
     }
   };
 
@@ -92,7 +64,7 @@ export default function Toolbar({ onAddNode }: ToolbarProps) {
             className="px-3 py-1 border border-gray-300 rounded-md text-sm"
           />
           <button
-            onClick={handleCreateNetwork}
+            onClick={handleCreateNewNetwork}
             className="px-3 py-1 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600"
           >
             New
@@ -102,21 +74,7 @@ export default function Toolbar({ onAddNode }: ToolbarProps) {
             disabled={!networkId.trim()}
             className="px-3 py-1 bg-green-500 text-white rounded-md text-sm hover:bg-green-600 disabled:bg-gray-300"
           >
-            Load
-          </button>
-          <button
-            onClick={handleSaveNetwork}
-            disabled={!currentNetwork || !isDirty}
-            className="px-3 py-1 bg-yellow-500 text-white rounded-md text-sm hover:bg-yellow-600 disabled:bg-gray-300"
-          >
-            Save {isDirty && '*'}
-          </button>
-          <button
-            onClick={handleDeleteNetwork}
-            disabled={!currentNetwork}
-            className="px-3 py-1 bg-red-500 text-white rounded-md text-sm hover:bg-red-600 disabled:bg-gray-300"
-          >
-            Delete
+            Load Demo
           </button>
         </div>
 
@@ -144,16 +102,7 @@ export default function Toolbar({ onAddNode }: ToolbarProps) {
 
         {/* Layout Options removed */}
 
-        {/* Network Controls */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleResetNetwork}
-            disabled={!currentNetwork}
-            className="px-3 py-1 bg-orange-500 text-white rounded-md text-sm hover:bg-orange-600 disabled:bg-gray-300"
-          >
-            Reset
-          </button>
-        </div>
+        {/* Network Controls removed - execution handles reset */}
 
         {/* Network Info */}
         {currentNetwork && (

@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""
+Test fixing terminal behavior by setting measurement functions.
+"""
+
+import sys
+sys.path.append('/workspace/recon-platform')
+
+from recon_engine import ReCoNGraph
+
+# Test network data from user
+network_data = {
+    "nodes": [
+        {"id": "Root", "type": "script", "state": "inactive", "activation": 0, "gates": {"sub": 0, "sur": 0, "por": 0, "ret": 0, "gen": 0}, "timing_config": {"timing_mode": "discrete", "discrete_wait_steps": 3, "sequence_wait_steps": 6, "activation_decay_rate": 0.8, "activation_failure_threshold": 0.1, "activation_initial_level": 0.8, "current_waiting_activation": 0}},
+        {"id": "A", "type": "script", "state": "inactive", "activation": 0, "gates": {"sub": 0, "sur": 0, "por": 0, "ret": 0, "gen": 0}, "timing_config": {"timing_mode": "discrete", "discrete_wait_steps": 3, "sequence_wait_steps": 6, "activation_decay_rate": 0.8, "activation_failure_threshold": 0.1, "activation_initial_level": 0.8, "current_waiting_activation": 0}},
+        {"id": "B", "type": "script", "state": "inactive", "activation": 0, "gates": {"sub": 0, "sur": 0, "por": 0, "ret": 0, "gen": 0}, "timing_config": {"timing_mode": "discrete", "discrete_wait_steps": 3, "sequence_wait_steps": 6, "activation_decay_rate": 0.8, "activation_failure_threshold": 0.1, "activation_initial_level": 0.8, "current_waiting_activation": 0}},
+        {"id": "TA", "type": "terminal", "state": "inactive", "activation": 1, "gates": {"sub": 0, "sur": 0, "por": 0, "ret": 0, "gen": 0}, "timing_config": {"timing_mode": "discrete", "discrete_wait_steps": 3, "sequence_wait_steps": 6, "activation_decay_rate": 0.8, "activation_failure_threshold": 0.1, "activation_initial_level": 0.8, "current_waiting_activation": 0}},
+        {"id": "TB", "type": "terminal", "state": "inactive", "activation": 1, "gates": {"sub": 0, "sur": 0, "por": 0, "ret": 0, "gen": 0}, "timing_config": {"timing_mode": "discrete", "discrete_wait_steps": 3, "sequence_wait_steps": 6, "activation_decay_rate": 0.8, "activation_failure_threshold": 0.1, "activation_initial_level": 0.8, "current_waiting_activation": 0}}
+    ],
+    "links": [
+        {"source": "Root", "target": "A", "type": "sub", "weight": 1},
+        {"source": "A", "target": "Root", "type": "sur", "weight": 1},
+        {"source": "Root", "target": "B", "type": "sub", "weight": 1},
+        {"source": "B", "target": "Root", "type": "sur", "weight": 1},
+        {"source": "A", "target": "B", "type": "por", "weight": 1},
+        {"source": "B", "target": "A", "type": "ret", "weight": 1},
+        {"source": "A", "target": "TA", "type": "sub", "weight": 1},
+        {"source": "TA", "target": "A", "type": "sur", "weight": 1},
+        {"source": "B", "target": "TB", "type": "sub", "weight": 1},
+        {"source": "TB", "target": "B", "type": "sur", "weight": 1}
+    ],
+    "requested_roots": [],
+    "step_count": 0
+}
+
+def test_with_measurement_fix():
+    print("=== Testing with Measurement Function Fix ===")
+    
+    # Create graph from data
+    graph = ReCoNGraph.from_dict(network_data)
+    
+    # Set measurement functions for terminals to use their activation values
+    ta_node = graph.get_node("TA")
+    tb_node = graph.get_node("TB")
+    
+    # Custom measurement function that returns the node's activation
+    def high_measurement(env=None):
+        return 1.0  # Above threshold
+    
+    ta_node.measurement_fn = high_measurement
+    tb_node.measurement_fn = high_measurement
+    
+    print(f"TA measurement after fix: {ta_node.measure()}")
+    print(f"TB measurement after fix: {tb_node.measure()}")
+    
+    # Execute and trace
+    print("\n=== Executing with Fixed Terminals ===")
+    graph.reset()
+    result = graph.execute_script_with_history("Root", max_steps=20)
+    
+    print(f"Final result: {result['result']}")
+    print(f"Total steps: {result['total_steps']}")
+    
+    print("\nFinal states:")
+    for node_id, node in graph.nodes.items():
+        print(f"  {node_id}: {node.state.value}")
+
+def test_with_activation_based_measurement():
+    print("\n=== Testing with Activation-Based Measurement ===")
+    
+    # Create graph from data
+    graph = ReCoNGraph.from_dict(network_data)
+    
+    # Set measurement functions to use the node's activation value
+    ta_node = graph.get_node("TA")
+    tb_node = graph.get_node("TB")
+    
+    def activation_measurement(env=None):
+        # Use the node's activation as measurement
+        return ta_node.activation if hasattr(ta_node, 'activation') else 0.5
+    
+    def activation_measurement_tb(env=None):
+        return tb_node.activation if hasattr(tb_node, 'activation') else 0.5
+    
+    ta_node.measurement_fn = activation_measurement
+    tb_node.measurement_fn = activation_measurement_tb
+    
+    print(f"TA measurement (using activation): {ta_node.measure()}")
+    print(f"TB measurement (using activation): {tb_node.measure()}")
+    
+    # Execute
+    graph.reset()
+    result = graph.execute_script_with_history("Root", max_steps=20)
+    
+    print(f"Final result: {result['result']}")
+    print("\nFinal states:")
+    for node_id, node in graph.nodes.items():
+        print(f"  {node_id}: {node.state.value}")
+
+if __name__ == "__main__":
+    test_with_measurement_fix()
+    test_with_activation_based_measurement()

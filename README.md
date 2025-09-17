@@ -16,7 +16,13 @@ Request Confirmation Networks for neuro‑symbolic script execution — a faithf
 
 - Live UI: [demo link] (TBD)
 - Video walkthrough: [![ReCoN Platform Demo](https://img.youtube.com/vi/S_MzzxUEFcQ/maxresdefault.jpg)](https://youtu.be/S_MzzxUEFcQ?si=lJVZrC9SaRp405EQ)
-- Short GIF: ![ReCoN Demo](demo/demo_recon.gif)
+- Quick Demo:
+
+<div align="center">
+  <img src="demo/demo_recon.gif" alt="ReCoN Platform Demo" width="800"/>
+  <br>
+  <em>ReCoN Platform in action: Dynamic network visualization with live ARC-AGI task execution, showing hierarchical node states and real-time confirmation propagation leading to action. Agent used: Recon ARC Angel.</em>
+</div>
 
 Quick CLI demo (exports data for the UI):
 

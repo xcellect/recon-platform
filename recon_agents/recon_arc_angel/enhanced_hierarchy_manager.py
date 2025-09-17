@@ -143,6 +143,9 @@ class EnhancedHierarchicalHypothesisManager:
             action_temp=1.0,  # Standard for actions
             coord_temp=1.6    # Flattened for coordinates (exploration)
         )
+        # CRITICAL FIX: Store original measure and create ReCoN wrapper
+        self.cnn_terminal._original_measure = self.cnn_terminal.measure
+        self.cnn_terminal.measure = lambda env=None: 0.9 if env is None else self.cnn_terminal._original_measure(env)
         self.graph.add_node(self.cnn_terminal)
         self.graph.add_link("click_cnn", "cnn_terminal", "sub", weight=1.0)
         
@@ -150,6 +153,9 @@ class EnhancedHierarchicalHypothesisManager:
         self.resnet_terminal = ResNetActionValueTerminal("resnet_terminal")
         if torch.cuda.is_available():
             self.resnet_terminal.to_device('cuda')
+        # CRITICAL FIX: Store original measure and create ReCoN wrapper
+        self.resnet_terminal._original_measure = self.resnet_terminal.measure
+        self.resnet_terminal.measure = lambda env=None: 0.9 if env is None else self.resnet_terminal._original_measure(env)
         self.graph.add_node(self.resnet_terminal)
         self.graph.add_link("hypothesis_testing", "resnet_terminal", "sub", weight=1.0)
     

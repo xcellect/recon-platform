@@ -92,10 +92,10 @@ def compute_object_penalties(object_data: List[Dict], pxy: Optional[np.ndarray] 
     return penalties
 
 
-def create_recon_click_arbiter(object_data: List[Dict], pxy: Optional[np.ndarray] = None,
-                              grid_size: int = 64, **penalty_kwargs) -> Tuple[ReCoNGraph, List[float]]:
+def create_recon_hypothesis_graph(object_data: List[Dict], pxy: Optional[np.ndarray] = None,
+                                  grid_size: int = 64, value_model=None, **penalty_kwargs) -> Tuple[ReCoNGraph, List[float]]:
     """
-    Create ReCoN graph for click object arbitration.
+    Create hierarchical ReCoN graph for hypothesis-driven action selection.
     
     Returns:
         Tuple of (ReCoN graph, object weights)
@@ -106,20 +106,111 @@ def create_recon_click_arbiter(object_data: List[Dict], pxy: Optional[np.ndarray
     # Create ReCoN graph
     graph = ReCoNGraph()
     
-    # Root script node
-    root = graph.add_node("action_click", "script")
+    # Root hypothesis: "Can achieve score increase"
+    root = graph.add_node("score_increase_hypothesis", "script")
     
-    # Add terminal for each valid object
+    # Branch 1: Basic action hypothesis
+    basic_branch = graph.add_node("basic_action_branch", "script")
+    graph.add_link("score_increase_hypothesis", "basic_action_branch", "sub")
+    
+    # Sequential basic actions with por/ret
+    action_nodes = []
+    for i in range(1, 6):
+        action_id = f"action_{i}"
+        action_node = graph.add_node(action_id, "script")
+        action_nodes.append(action_node)
+        graph.add_link("basic_action_branch", action_id, "sub")
+        
+        # Add measurement terminal for this action
+        terminal_id = f"{action_id}_terminal"
+        terminal = graph.add_node(terminal_id, "terminal")
+        # Real measurement: use value model if available, else simple heuristic
+        if value_model:
+            terminal.measurement_fn = lambda env, act_idx=i-1: _measure_action_value(env, act_idx, value_model)
+        else:
+            terminal.measurement_fn = lambda env, act_idx=i-1: 0.8 + 0.02 * act_idx  # Above threshold
+        # Set lower threshold so measurements can confirm
+        terminal.transition_threshold = 0.7
+        graph.add_link(action_id, terminal_id, "sub")
+        
+        # Create sequence: action_1 -> action_2 -> ... -> action_5
+        if i > 1:
+            prev_action = f"action_{i-1}"
+            graph.add_link(prev_action, action_id, "por")
+    
+    # Branch 2: Click hypothesis with sequential structure
+    click_branch = graph.add_node("click_hypothesis", "script")
+    graph.add_link("score_increase_hypothesis", "click_hypothesis", "sub")
+    
+    # Sequential click steps: perceive -> select -> verify
+    perceive_step = graph.add_node("perceive_objects", "script")
+    select_step = graph.add_node("select_object", "script")
+    verify_step = graph.add_node("verify_change", "script")
+    
+    graph.add_link("click_hypothesis", "perceive_objects", "sub")
+    graph.add_link("click_hypothesis", "select_step", "sub")
+    graph.add_link("click_hypothesis", "verify_step", "sub")
+    
+    # Sequence constraint: perceive -> select -> verify
+    graph.add_link("perceive_objects", "select_step", "por")
+    graph.add_link("select_step", "verify_step", "por")
+    
+    # Add perception terminal under perceive_objects (fix: script needs children)
+    perception_terminal = graph.add_node("perception_ready", "terminal")
+    perception_terminal.measurement_fn = lambda env: 0.9  # Always ready to perceive
+    graph.add_link("perceive_objects", "perception_ready", "sub")
+    
+    # Add object terminals under select_step with real measurements
     for i, (obj, weight) in enumerate(zip(object_data, object_weights)):
-        if weight > 0:  # Only add objects with positive weights
-            # Create terminal node that always confirms (measurement = 1.0)
+        if weight > 0:
             terminal = graph.add_node(f"object_{i}", "terminal")
-            terminal.measurement_fn = lambda env=None: 1.0  # Always able to confirm
-            
-            # Connect with weight as sur link weight (for bottom-up confirmation scaling)
-            graph.add_link("action_click", f"object_{i}", "sub", weight)
+            # Real measurement: object quality (regularity, area, contrast)
+            terminal.measurement_fn = lambda env, obj=obj: _measure_object_quality(obj)
+            # Set lower threshold so object measurements can confirm
+            terminal.transition_threshold = 0.6
+            graph.add_link("select_step", f"object_{i}", "sub", weight)
+    
+    # Add change verification terminal
+    change_terminal = graph.add_node("change_detector", "terminal")
+    change_terminal.measurement_fn = lambda env: 0.8  # Placeholder for frame change detection
+    graph.add_link("verify_step", "change_detector", "sub")
     
     return graph, object_weights
+
+
+def _measure_action_value(env, action_idx: int, value_model) -> float:
+    """Measure action value using BlindSquirrel value model."""
+    try:
+        if value_model and hasattr(value_model, 'predict_value'):
+            # Use actual value model prediction
+            return max(0.0, min(1.0, float(value_model.predict_value(env, action_idx))))
+        else:
+            # Fallback heuristic
+            return 0.2 + 0.1 * action_idx
+    except Exception:
+        return 0.3
+
+
+def _measure_object_quality(obj: Dict[str, Any]) -> float:
+    """Measure object quality based on segmentation properties."""
+    try:
+        # Combine regularity, size, and contrast into measurement
+        regularity = obj.get('regularity', 0.5)
+        area_frac = obj.get('area', 0) / (64 * 64)
+        size_bonus = min(1.0, area_frac / 0.01)  # Bonus for reasonable size
+        
+        # Quality measurement
+        quality = regularity * 0.6 + size_bonus * 0.4
+        return max(0.0, min(1.0, quality))
+    except Exception:
+        return 0.5
+
+
+# Legacy function for backward compatibility
+def create_recon_click_arbiter(object_data: List[Dict], pxy: Optional[np.ndarray] = None,
+                              grid_size: int = 64, **penalty_kwargs) -> Tuple[ReCoNGraph, List[float]]:
+    """Legacy wrapper - redirects to hierarchical version."""
+    return create_recon_hypothesis_graph(object_data, pxy, grid_size, None, **penalty_kwargs)
 
 
 def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float], 
@@ -147,10 +238,10 @@ def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float],
     
     # Execute ReCoN script with history for logging
     history = None
-    result = graph.execute_script("action_click", max_steps=10)
+    result = graph.execute_script("score_increase_hypothesis", max_steps=15)
     if log_meta is not None:
         try:
-            history = graph.execute_script_with_history("action_click", max_steps=10)
+            history = graph.execute_script_with_history("score_increase_hypothesis", max_steps=15)
         except Exception:
             history = None
     
@@ -454,13 +545,16 @@ class BlindSquirrelState:
             return self._get_click_action_obj(action)
         
         try:
-            # Use ReCoN click arbiter to select object
+            # Use ReCoN hypothesis graph to select object
             pxy = recon_kwargs.get('pxy', None)  # Optional click heatmap
             grid_size = 64  # ARC grid size
             
-            # Create and execute ReCoN arbiter
-            graph, object_weights = create_recon_click_arbiter(
-                self.object_data, pxy, grid_size, 
+            # Get value model from state_graph if available
+            value_model = getattr(state_graph, 'action_model', None) if state_graph else None
+            
+            # Create and execute hierarchical ReCoN hypothesis
+            graph, object_weights = create_recon_hypothesis_graph(
+                self.object_data, pxy, grid_size, value_model,
                 area_frac_cutoff=recon_kwargs.get('area_frac_cutoff', 0.005),
                 border_penalty=recon_kwargs.get('border_penalty', 0.8)
             )

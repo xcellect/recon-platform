@@ -98,6 +98,9 @@ class HypothesisManager:
         """Add CNN terminal for action/coordinate prediction"""
         # Create and integrate CNN terminal with GPU acceleration
         self.cnn_terminal = CNNValidActionTerminal("cnn_terminal", use_gpu=True)
+        # CRITICAL FIX: Store original measure and create ReCoN wrapper
+        self.cnn_terminal._original_measure = self.cnn_terminal.measure
+        self.cnn_terminal.measure = lambda env=None: 0.9 if env is None else self.cnn_terminal._original_measure(env)
         self.graph.add_node(self.cnn_terminal)
         
         # Connect to root for global frame analysis

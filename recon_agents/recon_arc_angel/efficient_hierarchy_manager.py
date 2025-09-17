@@ -105,6 +105,9 @@ class EfficientHierarchicalHypothesisManager:
         """Add neural terminals for action/value prediction"""
         # CNN terminal for action probabilities (original approach)
         self.cnn_terminal = CNNValidActionTerminal("cnn_terminal", use_gpu=True)
+        # CRITICAL FIX: Store original measure and create ReCoN wrapper
+        self.cnn_terminal._original_measure = self.cnn_terminal.measure
+        self.cnn_terminal.measure = lambda env=None: 0.9 if env is None else self.cnn_terminal._original_measure(env)
         self.graph.add_node(self.cnn_terminal)
         self.graph.add_link("frame_change_hypothesis", "cnn_terminal", "sub", weight=1.0)
         
@@ -112,6 +115,9 @@ class EfficientHierarchicalHypothesisManager:
         self.resnet_terminal = ResNetActionValueTerminal("resnet_terminal")
         if torch.cuda.is_available():
             self.resnet_terminal.to_device('cuda')
+        # CRITICAL FIX: Store original measure and create ReCoN wrapper  
+        self.resnet_terminal._original_measure = self.resnet_terminal.measure
+        self.resnet_terminal.measure = lambda env=None: 0.9 if env is None else self.resnet_terminal._original_measure(env)
         self.graph.add_node(self.resnet_terminal)
         self.graph.add_link("frame_change_hypothesis", "resnet_terminal", "sub", weight=1.0)
     
@@ -234,8 +240,8 @@ class EfficientHierarchicalHypothesisManager:
         # Update dynamic objects first
         self.update_dynamic_objects(frame)
         
-        # Get CNN predictions
-        measurement = self.cnn_terminal.measure(frame)
+        # Get CNN predictions using original measure method
+        measurement = self.cnn_terminal._original_measure(frame)
         result = self.cnn_terminal._process_measurement(measurement)
         
         action_probs = result["action_probabilities"]

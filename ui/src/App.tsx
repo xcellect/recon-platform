@@ -137,29 +137,41 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-black">
-      {/* Tab Navigation */}
+      {/* Tab Navigation with Logo */}
       <div className="bg-gray-900 border-b border-gray-700">
-        <div className="flex">
-          <button
-            onClick={() => setActiveTab('recon')}
-            className={`px-6 py-3 text-sm font-medium border-b-2 ${
-              activeTab === 'recon'
-                ? 'border-red-500 text-red-400'
-                : 'border-transparent text-gray-300 hover:text-white hover:border-gray-500'
-            }`}
-          >
-            PLAYGROUND
-          </button>
-          <button
-            onClick={() => setActiveTab('scorecard')}
-            className={`px-6 py-3 text-sm font-medium border-b-2 ${
-              activeTab === 'scorecard'
-                ? 'border-red-500 text-red-400'
-                : 'border-transparent text-gray-300 hover:text-white hover:border-gray-500'
-            }`}
-          >
-            ARCON
-          </button>
+        <div className="flex items-center justify-between">
+          {/* Left: Tabs */}
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab('recon')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 ${
+                activeTab === 'recon'
+                  ? 'border-red-500 text-red-400'
+                  : 'border-transparent text-gray-300 hover:text-white hover:border-gray-500'
+              }`}
+            >
+              PLAYGROUND
+            </button>
+            <button
+              onClick={() => setActiveTab('scorecard')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 ${
+                activeTab === 'scorecard'
+                  ? 'border-red-500 text-red-400'
+                  : 'border-transparent text-gray-300 hover:text-white hover:border-gray-500'
+              }`}
+            >
+              ARCON
+            </button>
+          </div>
+          
+          {/* Right: Logo */}
+          <div className="flex items-center px-6">
+            <img 
+              src="/assets/icon.svg" 
+              alt="ReCon Logo" 
+              className="h-6"
+            />
+          </div>
         </div>
       </div>
 

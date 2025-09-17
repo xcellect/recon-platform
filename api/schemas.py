@@ -96,6 +96,23 @@ class VisualizationResponse(BaseModel):
     snapshot: StateSnapshot
     
 
+class ExecutionStep(BaseModel):
+    """Single step in execution history."""
+    step: int
+    states: Dict[str, str]
+    messages: List[Dict[str, Any]]
+
+
+class ExecutionHistoryResponse(BaseModel):
+    """Response from execution with full history."""
+    network_id: str
+    root_node: str
+    result: str  # "confirmed", "failed", "timeout"
+    steps: List[ExecutionStep]
+    final_state: str
+    total_steps: int
+
+
 class ErrorResponse(BaseModel):
     """Error response."""
     error: str

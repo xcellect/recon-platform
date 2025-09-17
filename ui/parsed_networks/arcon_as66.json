@@ -1,0 +1,2708 @@
+{
+  "network_id": "arcon_as66-821a4dcad9c2",
+  "nodes": [
+    {
+      "node_id": "score_increase_hypothesis",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "basic_action_branch",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "action_1",
+      "node_type": "script",
+      "state": "true",
+      "activation": 0.5
+    },
+    {
+      "node_id": "action_1_terminal",
+      "node_type": "terminal",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "action_2",
+      "node_type": "script",
+      "state": "true",
+      "activation": 0.5
+    },
+    {
+      "node_id": "action_2_terminal",
+      "node_type": "terminal",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "action_3",
+      "node_type": "script",
+      "state": "true",
+      "activation": 0.5
+    },
+    {
+      "node_id": "action_3_terminal",
+      "node_type": "terminal",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "action_4",
+      "node_type": "script",
+      "state": "true",
+      "activation": 0.5
+    },
+    {
+      "node_id": "action_4_terminal",
+      "node_type": "terminal",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "action_5",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "action_5_terminal",
+      "node_type": "terminal",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "click_hypothesis",
+      "node_type": "script",
+      "state": "inactive",
+      "activation": 0.0
+    },
+    {
+      "node_id": "perceive_objects",
+      "node_type": "script",
+      "state": "true",
+      "activation": 0.5
+    },
+    {
+      "node_id": "select_object",
+      "node_type": "script",
+      "state": "true",
+      "activation": 0.5
+    },
+    {
+      "node_id": "verify_change",
+      "node_type": "script",
+      "state": "inactive",
+      "activation": 0.0
+    },
+    {
+      "node_id": "perception_ready",
+      "node_type": "terminal",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_0",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_1",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_2",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_3",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_4",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_5",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_6",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_7",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_16",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_17",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_18",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_19",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_20",
+      "node_type": "script",
+      "state": "confirmed",
+      "activation": 1.0
+    },
+    {
+      "node_id": "object_21",
+      "node_type": "script",
+      "state": "failed",
+      "activation": 0.0
+    },
+    {
+      "node_id": "object_22",
+      "node_type": "script",
+      "state": "failed",
+      "activation": 0.0
+    },
+    {
+      "node_id": "change_detector",
+      "node_type": "terminal",
+      "state": "failed",
+      "activation": 0.0
+    }
+  ],
+  "links": [
+    {
+      "source": "score_increase_hypothesis",
+      "target": "basic_action_branch",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "score_increase_hypothesis",
+      "target": "click_hypothesis",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "basic_action_branch",
+      "target": "action_1",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "basic_action_branch",
+      "target": "action_2",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "basic_action_branch",
+      "target": "action_3",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "basic_action_branch",
+      "target": "action_4",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "basic_action_branch",
+      "target": "action_5",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "action_1_terminal",
+      "target": "action_1",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "action_2",
+      "target": "action_1",
+      "link_type": "ret",
+      "weight": 1.0
+    },
+    {
+      "source": "action_2_terminal",
+      "target": "action_2",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "action_3",
+      "target": "action_2",
+      "link_type": "ret",
+      "weight": 1.0
+    },
+    {
+      "source": "action_3_terminal",
+      "target": "action_3",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "action_4",
+      "target": "action_5",
+      "link_type": "por",
+      "weight": 1.0
+    },
+    {
+      "source": "action_4",
+      "target": "action_3",
+      "link_type": "ret",
+      "weight": 1.0
+    },
+    {
+      "source": "action_4",
+      "target": "action_4_terminal",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "action_4_terminal",
+      "target": "action_4",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "action_5",
+      "target": "action_4",
+      "link_type": "ret",
+      "weight": 1.0
+    },
+    {
+      "source": "click_hypothesis",
+      "target": "perceive_objects",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "click_hypothesis",
+      "target": "select_object",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "click_hypothesis",
+      "target": "verify_change",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "select_object",
+      "target": "perceive_objects",
+      "link_type": "ret",
+      "weight": 1.0
+    },
+    {
+      "source": "verify_change",
+      "target": "select_object",
+      "link_type": "ret",
+      "weight": 1.0
+    },
+    {
+      "source": "perception_ready",
+      "target": "perceive_objects",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_0",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_1",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_2",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_3",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_4",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_5",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_6",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_7",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_16",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_17",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_18",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_19",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "object_20",
+      "target": "select_object",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "user",
+      "target": "score_increase_hypothesis",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "action_5",
+      "target": "action_5_terminal",
+      "link_type": "sub",
+      "weight": 1.0
+    },
+    {
+      "source": "action_5_terminal",
+      "target": "action_5",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "action_5",
+      "target": "basic_action_branch",
+      "link_type": "sur",
+      "weight": 1.0
+    },
+    {
+      "source": "basic_action_branch",
+      "target": "score_increase_hypothesis",
+      "link_type": "sur",
+      "weight": 1.0
+    }
+  ],
+  "step_count": 10,
+  "execution_history": [
+    {
+      "step": 0,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "waiting",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "waiting",
+        "action_4_terminal": "confirmed",
+        "action_5": "suppressed",
+        "action_5_terminal": "inactive",
+        "click_hypothesis": "waiting",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "failed",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": []
+    },
+    {
+      "step": 1,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "waiting",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "suppressed",
+        "action_5_terminal": "inactive",
+        "click_hypothesis": "waiting",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "failed",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_1",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_2",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_3",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_4",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_5",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_request",
+          "from": "action_4",
+          "to": "action_5",
+          "link": "por"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "request",
+          "from": "action_4",
+          "to": "action_4_terminal",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "action_4",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "perceive_objects",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "select_object",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "verify_change",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "click_hypothesis",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "verify_change",
+          "to": "select_object",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "waiting",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "active",
+        "action_5_terminal": "inactive",
+        "click_hypothesis": "waiting",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "failed",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_1",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_2",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_3",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_4",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_5",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "perceive_objects",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "select_object",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "verify_change",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "click_hypothesis",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "verify_change",
+          "to": "select_object",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "waiting",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "waiting",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "waiting",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "failed",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_1",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_2",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_3",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_4",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_5",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "request",
+          "from": "action_5",
+          "to": "action_5_terminal",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "action_5",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "perceive_objects",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "select_object",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "verify_change",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "click_hypothesis",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "verify_change",
+          "to": "select_object",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 4,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "waiting",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "true",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "failed",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "failed",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_1",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_2",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_3",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_4",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_5",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "request",
+          "from": "action_5",
+          "to": "action_5_terminal",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "action_5",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5_terminal",
+          "to": "action_5",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "perceive_objects",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "select_object",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "click_hypothesis",
+          "to": "verify_change",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "click_hypothesis",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "verify_change",
+          "to": "select_object",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 5,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "waiting",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "confirmed",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "failed",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "inactive",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_1",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_2",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_3",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_4",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_5",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5_terminal",
+          "to": "action_5",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "verify_change",
+          "to": "select_object",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 6,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "true",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "confirmed",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "failed",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "inactive",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_1",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_2",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_3",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_4",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "basic_action_branch",
+          "to": "action_5",
+          "link": "sub"
+        },
+        {
+          "type": "wait",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5_terminal",
+          "to": "action_5",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 7,
+      "states": {
+        "score_increase_hypothesis": "waiting",
+        "basic_action_branch": "confirmed",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "confirmed",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "failed",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "inactive",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5_terminal",
+          "to": "action_5",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 8,
+      "states": {
+        "score_increase_hypothesis": "true",
+        "basic_action_branch": "confirmed",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "confirmed",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "failed",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "inactive",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "basic_action_branch",
+          "link": "sub"
+        },
+        {
+          "type": "request",
+          "from": "score_increase_hypothesis",
+          "to": "click_hypothesis",
+          "link": "sub"
+        },
+        {
+          "type": "confirm",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5_terminal",
+          "to": "action_5",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    },
+    {
+      "step": 9,
+      "states": {
+        "score_increase_hypothesis": "confirmed",
+        "basic_action_branch": "confirmed",
+        "action_1": "true",
+        "action_1_terminal": "confirmed",
+        "action_2": "true",
+        "action_2_terminal": "confirmed",
+        "action_3": "true",
+        "action_3_terminal": "confirmed",
+        "action_4": "true",
+        "action_4_terminal": "confirmed",
+        "action_5": "confirmed",
+        "action_5_terminal": "confirmed",
+        "click_hypothesis": "inactive",
+        "perceive_objects": "true",
+        "select_object": "true",
+        "verify_change": "inactive",
+        "perception_ready": "confirmed",
+        "object_0": "confirmed",
+        "object_1": "confirmed",
+        "object_2": "confirmed",
+        "object_3": "confirmed",
+        "object_4": "confirmed",
+        "object_5": "confirmed",
+        "object_6": "confirmed",
+        "object_7": "confirmed",
+        "object_16": "confirmed",
+        "object_17": "confirmed",
+        "object_18": "confirmed",
+        "object_19": "confirmed",
+        "object_20": "confirmed",
+        "object_21": "failed",
+        "object_22": "failed",
+        "change_detector": "failed"
+      },
+      "messages": [
+        {
+          "type": "confirm",
+          "from": "basic_action_branch",
+          "to": "score_increase_hypothesis",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_1_terminal",
+          "to": "action_1",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_2",
+          "to": "action_1",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_2_terminal",
+          "to": "action_2",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_3",
+          "to": "action_2",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_3_terminal",
+          "to": "action_3",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_4",
+          "to": "action_3",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_4_terminal",
+          "to": "action_4",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "action_5",
+          "to": "action_4",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5",
+          "to": "basic_action_branch",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "action_5_terminal",
+          "to": "action_5",
+          "link": "sur"
+        },
+        {
+          "type": "inhibit_confirm",
+          "from": "select_object",
+          "to": "perceive_objects",
+          "link": "ret"
+        },
+        {
+          "type": "confirm",
+          "from": "perception_ready",
+          "to": "perceive_objects",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_0",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_1",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_2",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_3",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_4",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_5",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_6",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_7",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_16",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_17",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_18",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_19",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "confirm",
+          "from": "object_20",
+          "to": "select_object",
+          "link": "sur"
+        },
+        {
+          "type": "request",
+          "from": "user",
+          "to": "score_increase_hypothesis",
+          "link": "sub"
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "agent": "ArconReCoN",
+    "game_id": "as66-821a4dcad9c2",
+    "score": 0,
+    "action_count": 10,
+    "timestamp_utc": "20250917T192445815911Z"
+  }
+}

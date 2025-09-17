@@ -10,14 +10,29 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List, Optional
 import uuid
 from contextlib import asynccontextmanager
+from pydantic import BaseModel, Field
 
 from recon_engine import ReCoNGraph, ReCoNNode, ReCoNState
 from recon_engine.compact import CompactReCoNGraph
-from .schemas import (
+from schemas import (
     NodeCreateRequest, NodeResponse, LinkCreateRequest, LinkResponse,
     NetworkCreateRequest, NetworkResponse, ExecuteRequest, ExecuteResponse,
-    StateSnapshot, VisualizationResponse, ErrorResponse
+    StateSnapshot, VisualizationResponse, ErrorResponse, ExecutionHistoryResponse,
+    ExecutionStep
 )
+
+
+class TerminalConfig(BaseModel):
+    """Configuration for a terminal node."""
+    node_id: str = Field(..., description="Terminal node ID")
+    measurement_value: float = Field(0.5, description="Measurement value (0-1)")
+
+class DirectExecuteRequest(BaseModel):
+    """Request to execute a network directly from data."""
+    network_data: dict = Field(..., description="Network data to execute")
+    root_node: str = Field(..., description="Root node to execute")
+    max_steps: int = Field(100, description="Maximum execution steps")
+    terminal_configs: Optional[List[TerminalConfig]] = Field([], description="Terminal configurations")
 
 
 # Global storage for networks (replace with database in production)
@@ -30,17 +45,24 @@ async def lifespan(app: FastAPI):
     # Startup
     print("ReCoN Platform API starting up...")
     
-    # Create demo network
+    # Create demo network - corrected structure
     demo_id = "demo"
     demo_graph = ReCoNGraph()
     demo_graph.add_node("Root", "script")
-    demo_graph.add_node("A", "script") 
+    demo_graph.add_node("A", "script")
     demo_graph.add_node("B", "script")
-    demo_graph.add_node("T", "terminal")
-    
-    demo_graph.add_link("Root", "A", "sub")
-    demo_graph.add_link("A", "B", "por")
-    demo_graph.add_link("B", "T", "sub")
+    demo_graph.add_node("TA", "terminal")  # Terminal for A
+    demo_graph.add_node("TB", "terminal")  # Terminal for B
+
+    # Terminals start with default behavior (auto-confirm), can be overridden via API
+    # Users can manually control via /networks/{id}/nodes/{node_id}/confirm endpoint
+
+    # Proper sequence structure: Root requests both A and B, A inhibits B until complete
+    demo_graph.add_link("Root", "A", "sub")    # Root requests A
+    demo_graph.add_link("Root", "B", "sub")    # Root requests B
+    demo_graph.add_link("A", "B", "por")       # A inhibits B until A completes
+    demo_graph.add_link("A", "TA", "sub")      # A validates via TA
+    demo_graph.add_link("B", "TB", "sub")      # B validates via TB
     
     networks[demo_id] = demo_graph
     print(f"Created demo network with ID: {demo_id}")
@@ -192,25 +214,111 @@ async def execute_script(network_id: str, request: ExecuteRequest):
     """Execute a script in the network."""
     if network_id not in networks:
         raise HTTPException(status_code=404, detail=f"Network {network_id} not found")
-    
+
     graph = networks[network_id]
-    
+
     try:
         # Reset network before execution
         graph.reset()
-        
+
         # Execute script
         result = graph.execute_script(request.root_node, request.max_steps)
-        
+
         # Get final states
         final_states = {node_id: node.state.value for node_id, node in graph.nodes.items()}
-        
+
         return ExecuteResponse(
             network_id=network_id,
-            root_node=request.root_node, 
+            root_node=request.root_node,
             result=result,
             final_states=final_states,
             steps_taken=graph.step_count
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/execute-network", response_model=ExecutionHistoryResponse)
+async def execute_network_direct(request: DirectExecuteRequest):
+    """Execute a network directly from provided data (no storage)."""
+    try:
+        # Create graph from provided data
+        graph = ReCoNGraph.from_dict(request.network_data)
+        
+        # Configure terminals with user-defined measurement values
+        print(f"Configuring {len(request.terminal_configs or [])} terminals")
+        for terminal_config in request.terminal_configs or []:
+            print(f"Configuring terminal {terminal_config.node_id}: measurement={terminal_config.measurement_value}")
+            if terminal_config.node_id in graph.nodes:
+                terminal_node = graph.get_node(terminal_config.node_id)
+                if terminal_node.type == "terminal":
+                    # Set measurement function to return the user-specified value
+                    measurement_val = float(terminal_config.measurement_value)
+                    terminal_node.measurement_fn = lambda env, val=measurement_val: val
+                    print(f"Set {terminal_config.node_id} measurement to {measurement_val}")
+                    
+                    # Test the measurement function
+                    test_measurement = terminal_node.measure()
+                    print(f"{terminal_config.node_id} measurement test: {test_measurement}")
+        
+        # Reset and execute
+        graph.reset()
+        execution_result = graph.execute_script_with_history(request.root_node, request.max_steps)
+
+        # Convert steps to schema format
+        steps = [
+            ExecutionStep(
+                step=step_data["step"],
+                states=step_data["states"],
+                messages=step_data["messages"]
+            )
+            for step_data in execution_result["steps"]
+        ]
+
+        return ExecutionHistoryResponse(
+            network_id="direct",
+            root_node=request.root_node,
+            result=execution_result["result"],
+            steps=steps,
+            final_state=execution_result["final_state"],
+            total_steps=execution_result["total_steps"]
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Execution failed: {str(e)}")
+
+
+@app.post("/networks/{network_id}/execute-with-history", response_model=ExecutionHistoryResponse)
+async def execute_script_with_history(network_id: str, request: ExecuteRequest):
+    """Execute a script in the network and return full execution history."""
+    if network_id not in networks:
+        raise HTTPException(status_code=404, detail=f"Network {network_id} not found")
+
+    graph = networks[network_id]
+
+    try:
+        # Reset network before execution
+        graph.reset()
+
+        # Execute script with history
+        execution_result = graph.execute_script_with_history(request.root_node, request.max_steps)
+
+        # Convert steps to schema format
+        steps = [
+            ExecutionStep(
+                step=step_data["step"],
+                states=step_data["states"],
+                messages=step_data["messages"]
+            )
+            for step_data in execution_result["steps"]
+        ]
+
+        return ExecutionHistoryResponse(
+            network_id=network_id,
+            root_node=request.root_node,
+            result=execution_result["result"],
+            steps=steps,
+            final_state=execution_result["final_state"],
+            total_steps=execution_result["total_steps"]
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -270,11 +378,53 @@ async def reset_network(network_id: str):
     """Reset network to initial state."""
     if network_id not in networks:
         raise HTTPException(status_code=404, detail=f"Network {network_id} not found")
-    
+
     graph = networks[network_id]
     graph.reset()
-    
+
     return {"message": "Network reset", "step": graph.step_count}
+
+
+@app.post("/networks/{network_id}/nodes/{node_id}/confirm")
+async def confirm_node(network_id: str, node_id: str):
+    """Manually confirm a terminal node."""
+    if network_id not in networks:
+        raise HTTPException(status_code=404, detail=f"Network {network_id} not found")
+
+    graph = networks[network_id]
+
+    if node_id not in graph.nodes:
+        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+
+    node = graph.get_node(node_id)
+    if node.type != "terminal":
+        raise HTTPException(status_code=400, detail=f"Node {node_id} is not a terminal")
+
+    # Set terminal to return successful measurement
+    node.measurement_fn = lambda env: 1.0  # Above threshold, will confirm
+
+    return {"message": f"Terminal {node_id} will confirm on next propagation step"}
+
+
+@app.post("/networks/{network_id}/nodes/{node_id}/fail")
+async def fail_node(network_id: str, node_id: str):
+    """Manually fail a terminal node."""
+    if network_id not in networks:
+        raise HTTPException(status_code=404, detail=f"Network {network_id} not found")
+
+    graph = networks[network_id]
+
+    if node_id not in graph.nodes:
+        raise HTTPException(status_code=404, detail=f"Node {node_id} not found")
+
+    node = graph.get_node(node_id)
+    if node.type != "terminal":
+        raise HTTPException(status_code=400, detail=f"Node {node_id} is not a terminal")
+
+    # Set terminal to return failed measurement
+    node.measurement_fn = lambda env: 0.0  # Below threshold, will fail
+
+    return {"message": f"Terminal {node_id} will fail on next propagation step"}
 
 
 # Export network data endpoints for future phases

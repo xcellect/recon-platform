@@ -1,0 +1,4 @@
+# file: /workspace/recon-platform/recon_engine/neural_terminal.py
+# hypothesis_version: 6.138.16
+
+[0.0, 0.8, 128, 256, 512, 4101, '__dict__', 'action_probabilities', 'activation', 'cache_size', 'classification', 'classifier', 'confirm', 'conv1', 'cpu', 'cuda', 'default', 'device', 'embedding', 'fail', 'features', 'has_classifier', 'has_features', 'input_shape', 'is_cnn', 'model_info', 'model_type', 'multi_head', 'output_mode', 'parameters', 'probability', 'sub', 'sur', 'terminal', 'threshold', 'to_tensor', 'trainable_parameters', 'value']

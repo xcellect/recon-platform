@@ -1,0 +1,4 @@
+# file: /workspace/recon-platform/recon_engine/node.py
+# hypothesis_version: 6.138.16
+
+[-1.0, -0.5, 0.0, 0.01, 0.1, 0.5, 0.8, 1.0, 'ReCoNNode', '_brief_wait_count', '_has_children', '_has_por_successors', 'activation', 'active', 'confirm', 'confirmed', 'discrete', 'discrete_wait_steps', 'explicit', 'fail', 'failed', 'gates', 'gen', 'hybrid', 'id', 'inactive', 'inhibit_confirm', 'inhibit_request', 'item', 'neural_model', 'numel', 'por', 'request', 'requested', 'ret', 'script', 'sequence_wait_steps', 'state', 'sub', 'suppressed', 'sur', 'terminal', 'timing_config', 'timing_mode', 'true', 'type', 'wait', 'waiting']

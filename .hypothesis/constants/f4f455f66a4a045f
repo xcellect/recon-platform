@@ -1,0 +1,4 @@
+# file: /workspace/recon-platform/recon_engine/neural_recon_unit.py
+# hypothesis_version: 6.138.16
+
+[-1.0, 0.0, 0.1, 0.5, 1.0, 'C', 'F', 'IC', 'IR', 'R', 'S1', 'S2', 'S3', 'S4', 'W', 'activations', 'confirm', 'fail', 'gen', 'implementation', 'inhibit_confirm', 'inhibit_request', 'neural_elements', 'neural_section_2_2', 'neural_state', 'por', 'request', 'ret', 'script', 'sub', 'sur', 'wait']

@@ -83,6 +83,11 @@ class ReCoNGraph:
         self.nodes[node_id] = node
         self.graph.add_node(node_id, node_obj=node)
         
+        # Initially set link flags to False
+        node._has_children = False
+        node._has_por_successors = False
+        node._has_sequence_children = False
+        
         return node
     
     def add_link(self, source: str, target: str, link_type: str, weight: Union[float, torch.Tensor] = 1.0) -> ReCoNLink:
@@ -114,17 +119,43 @@ class ReCoNGraph:
             if any((source, target, "por") == (s, t, lt) or (target, source, "ret") == (s, t, lt) 
                    for s, t, lt in existing_links):
                 raise ValueError(f"por/ret link pair already exists between {source} and {target}")
+            # Enforce paper rule: do not allow both por/ret and sub/sur between same node pair
+            if any(((source, target, "sub") == (s, t, lt)) or ((target, source, "sur") == (s, t, lt)) or
+                   ((target, source, "sub") == (s, t, lt)) or ((source, target, "sur") == (s, t, lt))
+                   for s, t, lt in existing_links):
+                raise ValueError(
+                    f"Cannot add {link_type} between {source} and {target}: sub/sur pair already exists for this node pair"
+                )
                 
         if link_type in ["sub", "sur"]:
             # Check for existing sub/sur pair  
             if any((source, target, "sub") == (s, t, lt) or (target, source, "sur") == (s, t, lt)
                    for s, t, lt in existing_links):
                 raise ValueError(f"sub/sur link pair already exists between {source} and {target}")
+            # Enforce paper rule: do not allow both sub/sur and por/ret between same node pair
+            if any(((source, target, "por") == (s, t, lt)) or ((target, source, "ret") == (s, t, lt)) or
+                   ((target, source, "por") == (s, t, lt)) or ((source, target, "ret") == (s, t, lt))
+                   for s, t, lt in existing_links):
+                raise ValueError(
+                    f"Cannot add {link_type} between {source} and {target}: por/ret pair already exists for this node pair"
+                )
         
         # Create primary link
         link = ReCoNLink(source, target, link_type, weight)
         self.links.append(link)
         self.graph.add_edge(source, target, link_obj=link, link_type=link_type)
+        
+        # Update link flags
+        if link_type == "sub":
+            self.nodes[source]._has_children = True
+            # Check if the child has por links (is part of sequence)
+            if hasattr(self.nodes[target], '_has_por_successors') and self.nodes[target]._has_por_successors:
+                self.nodes[source]._has_sequence_children = True
+        elif link_type == "por":
+            self.nodes[source]._has_por_successors = True
+            # Update parent's sequence children flag
+            for parent_link in self.get_links(target=source, link_type="sub"):
+                self.nodes[parent_link.source]._has_sequence_children = True
         
         # Create reciprocal link automatically
         reciprocal_type = None
@@ -176,7 +207,7 @@ class ReCoNGraph:
             
         self.requested_roots.add(node_id)
         
-        # Send initial request message
+        # Send initial request message and immediately process it
         root_node = self.nodes[node_id]
         message = ReCoNMessage(
             MessageType.REQUEST,
@@ -186,6 +217,12 @@ class ReCoNGraph:
             1.0
         )
         root_node.add_incoming_message(message)
+        
+        # Immediately update the root node state from INACTIVE to REQUESTED
+        if root_node.state == ReCoNState.INACTIVE:
+            # Process the request to move to REQUESTED state
+            inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
+            root_node.update_state(inputs)
     
     def stop_request(self, node_id: str):
         """Stop script execution by removing request from root node."""
@@ -235,7 +272,7 @@ class ReCoNGraph:
                 
                 for link in outgoing_links:
                     message_type = MessageType(signal) if isinstance(signal, str) else MessageType.REQUEST
-                    activation = link.weight if signal in ["request", "confirm"] else 0.0
+                    activation = 0.0
                     
                     if signal == "inhibit_request":
                         message_type = MessageType.INHIBIT_REQUEST
@@ -248,7 +285,16 @@ class ReCoNGraph:
                         activation = 0.01
                     elif signal == "confirm":
                         message_type = MessageType.CONFIRM
-                        activation = 1.0
+                        # Scale confirmation activation by link weight and sender activation magnitude
+                        try:
+                            sender_act = node.activation.item() if hasattr(node.activation, 'numel') and node.activation.numel() == 1 else float(node.activation)
+                        except Exception:
+                            sender_act = 1.0
+                        try:
+                            link_w = link.weight.item() if hasattr(link.weight, 'numel') and getattr(link.weight, 'numel', lambda: 1)() == 1 else float(link.weight)
+                        except Exception:
+                            link_w = 1.0
+                        activation = sender_act * link_w
                     elif signal == "request":
                         message_type = MessageType.REQUEST
                         activation = 1.0
@@ -262,15 +308,23 @@ class ReCoNGraph:
                     )
                     self.message_queue.append(message)
         
-        # Handle terminal node measurements
-        for node in self.nodes.values():
-            if node.type == "terminal" and node.state == ReCoNState.ACTIVE:
-                # Terminal measurement - automatically confirm for now
-                measurement = node.measure()
-                if measurement > 0.8:  # Threshold from paper
-                    node.state = ReCoNState.CONFIRMED
-                else:
-                    node.state = ReCoNState.FAILED
+        # Terminal nodes handle measurement in their update_state method
+        # No need for separate terminal handling here
+        
+        # Handle sequence chain propagation for backward compatibility
+        # If a node becomes TRUE and has por successors but no sub children,
+        # automatically request the next node in the sequence
+        self._handle_sequence_chain_propagation()
+    
+    def _handle_sequence_chain_propagation(self):
+        """
+        Handle backward compatibility for sequence chains.
+        
+        When a node becomes TRUE and has por successors but no sub children,
+        automatically request the next node in the sequence chain.
+        """
+        # Disabled for strict paper compliance (no automatic sequence requests)
+        return
     
     def is_completed(self) -> bool:
         """Check if all requested scripts have completed (confirmed or failed)."""
@@ -353,15 +407,79 @@ class ReCoNGraph:
         Returns final state: 'confirmed', 'failed', or 'timeout'.
         """
         self.request_root(root_id)
-        
+
         for step in range(max_steps):
             self.propagate_step()
-            
+
             if self.is_completed():
                 result = self.get_results()[root_id]
                 return result
-        
+
         return "timeout"
+
+    def execute_script_with_history(self, root_id: str, max_steps: int = 100) -> Dict[str, Any]:
+        """
+        Execute a script to completion, capturing full execution history.
+        Returns final state and all intermediate steps.
+        """
+        history = []
+
+        # Initial state (step 0)
+        initial_states = {node_id: node.state.value for node_id, node in self.nodes.items()}
+        history.append({
+            "step": 0,
+            "states": initial_states,
+            "messages": []
+        })
+
+        self.request_root(root_id)
+
+        for step in range(1, max_steps + 1):
+            # Capture current messages before propagation
+            current_messages = []
+            for message in self.message_queue:
+                current_messages.append({
+                    "type": message.type.value,
+                    "from": message.source,
+                    "to": message.target,
+                    "link": message.link_type
+                })
+
+            # Add root request messages
+            if root_id in self.requested_roots:
+                current_messages.append({
+                    "type": "request",
+                    "from": "user",
+                    "to": root_id,
+                    "link": "sub"
+                })
+
+            self.propagate_step()
+
+            # Capture state after propagation
+            step_states = {node_id: node.state.value for node_id, node in self.nodes.items()}
+
+            history.append({
+                "step": step,
+                "states": step_states,
+                "messages": current_messages
+            })
+
+            if self.is_completed():
+                result = self.get_results()[root_id]
+                return {
+                    "result": result,
+                    "steps": history,
+                    "final_state": result,
+                    "total_steps": step
+                }
+
+        return {
+            "result": "timeout",
+            "steps": history,
+            "final_state": "timeout",
+            "total_steps": max_steps
+        }
     
     def to_react_flow_format(self) -> Dict[str, Any]:
         """

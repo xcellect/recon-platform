@@ -17,7 +17,7 @@ from .messages import ReCoNMessage
 class NeuralOutputMode:
     """Output processing modes for neural terminals."""
     VALUE = "value"              # Single value prediction (BlindSquirrel style)
-    PROBABILITY = "probability"  # Probability distribution (StochasticGoose style)
+    PROBABILITY = "probability"  # Probability distribution (For specialized CNN terminal)
     CLASSIFICATION = "classification"  # Class prediction
     EMBEDDING = "embedding"      # Feature embedding
     MULTI_HEAD = "multi_head"    # Multiple outputs
@@ -199,7 +199,7 @@ class NeuralTerminal(HybridReCoNNode):
                 return raw_output.mean().item()
         
         elif self.output_mode == NeuralOutputMode.PROBABILITY:
-            # Probability distribution (e.g., StochasticGoose action probabilities)
+            # Probability distribution (e.g., specialized CNN terminal action probabilities)
             if raw_output.dim() > 1:
                 # Apply softmax to get probabilities
                 probabilities = F.softmax(raw_output, dim=-1)
@@ -252,7 +252,9 @@ class NeuralTerminal(HybridReCoNNode):
     def _get_cache_key(self, environment: Any) -> str:
         """Generate cache key for environment."""
         if isinstance(environment, torch.Tensor):
-            return str(environment.data.numpy().tobytes())
+            # Handle CUDA tensors by moving to CPU first
+            tensor_cpu = environment.detach().cpu()
+            return str(tensor_cpu.numpy().tobytes())
         elif isinstance(environment, np.ndarray):
             return str(environment.tobytes())
         elif isinstance(environment, (list, tuple)):
@@ -301,7 +303,7 @@ class NeuralTerminal(HybridReCoNNode):
         return base_dict
 
 
-class BlindSquirrelValueTerminal(NeuralTerminal):
+class ResNetActionValueTerminal(NeuralTerminal):
     """
     Specialized terminal for BlindSquirrel-style value prediction.
     
@@ -338,27 +340,47 @@ class BlindSquirrelValueTerminal(NeuralTerminal):
             return super()._prepare_input(environment)
 
 
-class StochasticGooseActionTerminal(NeuralTerminal):
+class CNNValidActionTerminal(NeuralTerminal):
     """
-    Specialized terminal for StochasticGoose-style action prediction.
+    Specialized terminal for action prediction with decoupled softmax normalization.
     
-    Uses CNN architecture to predict action probabilities.
+    Uses CNN architecture to predict action probabilities with separate temperature
+    control for actions and coordinates to prevent coupling issues.
     """
     
-    def __init__(self, node_id: str):
+    def __init__(self, node_id: str, use_gpu: bool = True, action_temp: float = 1.0, coord_temp: float = 1.4):
         # Create CNN-based action model
         model = self._create_action_model()
         super().__init__(node_id, model, NeuralOutputMode.PROBABILITY, (16, 64, 64))
+        
+        # Temperature parameters for decoupled softmax
+        self.action_temp = action_temp  # Ta = 1.0 (standard)
+        self.coord_temp = coord_temp    # Tc = 1.4 (flattens coordinates)
+        
+        # Cache for CNN outputs to enable clearing on stale clicks
+        self.output_cache = {}
+        self.cache_enabled = True
+        
+        # Move to GPU if available and requested
+        if use_gpu and torch.cuda.is_available():
+            self.to_device('cuda')
+            print(f"CNNValidActionTerminal {node_id} using GPU: {next(self.model.parameters()).device}")
     
     def _create_action_model(self) -> nn.Module:
         """Create CNN-based action prediction model."""
         return ActionPredictionModel()
     
     def _process_measurement(self, measurement: torch.Tensor) -> Dict[str, Any]:
-        """Process action probabilities for hierarchical sampling."""
+        """Process action probabilities with decoupled softmax normalization."""
         if measurement.numel() == 4101:  # 5 actions + 4096 coordinates
-            action_probs = measurement[:5]
-            coord_probs = measurement[5:].reshape(64, 64)
+            # Split logits
+            action_logits = measurement[:5]
+            coord_logits = measurement[5:]
+            
+            # Apply separate softmax with temperature (fixes coupling issue)
+            import torch.nn.functional as F
+            action_probs = F.softmax(action_logits / self.action_temp, dim=-1)
+            coord_probs = F.softmax(coord_logits / self.coord_temp, dim=-1).reshape(64, 64)
             
             return {
                 "sur": "confirm",
@@ -368,6 +390,19 @@ class StochasticGooseActionTerminal(NeuralTerminal):
             }
         else:
             return super()._process_measurement(measurement)
+    
+    def clear_cache(self):
+        """Clear CNN output cache to enable exploration after stale clicks."""
+        self.output_cache.clear()
+        if hasattr(self, '_last_input_hash'):
+            delattr(self, '_last_input_hash')
+    
+    def set_temperature(self, action_temp: float = None, coord_temp: float = None):
+        """Update temperature parameters for exploration control."""
+        if action_temp is not None:
+            self.action_temp = action_temp
+        if coord_temp is not None:
+            self.coord_temp = coord_temp
 
 
 class ValuePredictionModel(nn.Module):

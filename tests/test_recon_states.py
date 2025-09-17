@@ -47,6 +47,8 @@ class TestReCoNStates:
         """Active nodes should request children and send wait to parent."""
         node = ReCoNNode("test_node")
         node.state = ReCoNState.ACTIVE
+        # Set up node as if it has children (for Table 1 compliance testing)
+        node._has_children = True
         
         inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
         signals = node.update_state(inputs)
@@ -100,16 +102,19 @@ class TestReCoNStates:
         assert node.state == ReCoNState.FAILED
     
     def test_true_state_behavior(self):
-        """True nodes should stop inhibiting but not yet confirm."""
+        """True nodes should stop inhibiting predecessors via por but still inhibit via ret."""
         node = ReCoNNode("test_node")
         node.state = ReCoNState.TRUE
         
-        inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 1.0}
+        # TRUE state with ret inhibition (not last in sequence)
+        inputs = {"sub": 1.0, "por": 0.0, "ret": -1.0, "sur": 1.0}
         signals = node.update_state(inputs)
         
-        # Should not send por inhibition anymore
+        # Should not send por inhibition anymore (stopped inhibiting successors)
         assert signals.get("por") != "inhibit_request"
+        # Should still send ret inhibition (still inhibiting predecessors)  
         assert signals["ret"] == "inhibit_confirm"
+        # Should remain TRUE when ret inhibited (not last in sequence)
         assert node.state == ReCoNState.TRUE
     
     def test_true_to_confirmed_transition(self):
@@ -162,11 +167,21 @@ class TestReCoNStates:
         """Terminal nodes should have different behavior than script nodes."""
         terminal = ReCoNNode("terminal", node_type="terminal")
         
-        # Terminal nodes should only have states: inactive, active, confirmed
+        # Terminal with neutral default measurement should fail (requires explicit setup)
         inputs = {"sub": 1.0, "por": 0.0, "ret": 0.0, "sur": 0.0}
         signals = terminal.update_state(inputs)
         
-        assert terminal.state in [ReCoNState.INACTIVE, ReCoNState.ACTIVE, ReCoNState.CONFIRMED]
+        # With default neutral measurement (0.5 < 0.8), terminal should fail
+        assert terminal.state == ReCoNState.FAILED, \
+            f"Terminal with neutral default should fail, got {terminal.state}"
+        
+        # Terminal with explicit high measurement should confirm
+        terminal.reset()
+        terminal.measurement_fn = lambda env: 0.9  # Above threshold
+        signals = terminal.update_state(inputs)
+        
+        assert terminal.state == ReCoNState.CONFIRMED, \
+            f"Terminal with high measurement should confirm, got {terminal.state}"
         
         # Terminal nodes can only be targeted by sub, source of sur
         assert "sub" not in signals  # Cannot request children

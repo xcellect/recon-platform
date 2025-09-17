@@ -19,6 +19,7 @@ class NodeMode(Enum):
     EXPLICIT = "explicit"      # Discrete state machine
     IMPLICIT = "implicit"      # Continuous activation levels  
     NEURAL = "neural"          # Neural network terminal
+    NEURAL_THRESHOLD = "neural_threshold"  # Section 2.2 threshold element ensemble
     HYBRID = "hybrid"          # Can switch between modes
 
 
@@ -46,6 +47,9 @@ class HybridReCoNNode(ReCoNNode):
         self.neural_model = None
         self.input_processor = None
         self.output_processor = None
+        
+        # Section 2.2 neural threshold elements (lazy initialization)
+        self._threshold_elements = None
         
         # Message conversion functions
         self.discrete_to_continuous = self._default_d2c
@@ -187,6 +191,8 @@ class HybridReCoNNode(ReCoNNode):
             return self._process_implicit(messages)
         elif self.mode == NodeMode.NEURAL:
             return self._process_neural(messages)
+        elif self.mode == NodeMode.NEURAL_THRESHOLD:
+            return self._process_neural_threshold(messages)
         elif self.mode == NodeMode.HYBRID:
             return self._process_hybrid(messages)
         else:
@@ -194,8 +200,15 @@ class HybridReCoNNode(ReCoNNode):
     
     def _process_explicit(self, messages: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Process messages using explicit state machine."""
-        # Use parent class explicit processing
-        return super().process_messages(messages)
+        # Convert messages to inputs and use parent update_state
+        inputs = {}
+        for link_type, msg_list in messages.items():
+            if msg_list:
+                inputs[link_type] = self._extract_message_value(msg_list)
+            else:
+                inputs[link_type] = 0.0
+        
+        return super().update_state(inputs)
     
     def _process_implicit(self, messages: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Process messages using implicit activation levels."""
@@ -232,6 +245,133 @@ class HybridReCoNNode(ReCoNNode):
             return self.output_processor(output)
         else:
             return self._default_output_processing(output)
+    
+    def _process_neural_threshold(self, messages: Dict[str, List[Any]]) -> Dict[str, Any]:
+        """Process messages using Section 2.2 threshold element ensemble."""
+        # Lazy initialization of threshold elements
+        if self._threshold_elements is None:
+            self._initialize_threshold_elements()
+        
+        # Convert messages to input vector for neural ensemble
+        input_vector = torch.tensor([
+            float(self._extract_message_value(messages.get("sub", []))),
+            float(self._extract_message_value(messages.get("sur", []))),
+            float(self._extract_message_value(messages.get("por", []))),
+            float(self._extract_message_value(messages.get("ret", []))),
+            float(self._extract_message_value(messages.get("gen", [])))
+        ])
+        
+        # Process through threshold element ensemble
+        element_outputs = {}
+        for element_id, element in self._threshold_elements.items():
+            with torch.no_grad():
+                element_outputs[element_id] = element(input_vector)
+        
+        # Convert neural outputs to ReCoN messages
+        return self._neural_outputs_to_messages(element_outputs)
+    
+    def _initialize_threshold_elements(self):
+        """Initialize Section 2.2 threshold element ensemble."""
+        from .neural_recon_node import ThresholdElement
+        
+        self._threshold_elements = {
+            "IC": ThresholdElement("IC"),  # Inhibit Confirm
+            "IR": ThresholdElement("IR"),  # Inhibit Request
+            "W": ThresholdElement("W"),    # Wait signal
+            "C": ThresholdElement("C"),    # Confirm signal
+            "R": ThresholdElement("R"),    # Request signal
+            "F": ThresholdElement("F")     # Fail signal
+        }
+        
+        # Initialize connectivity (basic interpretation of Figure 3)
+        # Request activation → IC, IR, W
+        self._threshold_elements["IC"].weights.data = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0])
+        self._threshold_elements["IR"].weights.data = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0])
+        self._threshold_elements["W"].weights.data = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0])
+        
+        # Child confirmations → C
+        self._threshold_elements["C"].weights.data = torch.tensor([0.0, 1.0, 0.0, 0.0, 0.0])
+        
+        # Request children → R  
+        self._threshold_elements["R"].weights.data = torch.tensor([1.0, 0.0, 0.0, 0.0, 0.0])
+        
+        # Failure detection → F
+        self._threshold_elements["F"].weights.data = torch.tensor([0.0, -1.0, 0.0, 0.0, 0.0])
+    
+    def _extract_message_value(self, message_list: List[Any]) -> float:
+        """Extract numeric value from message list."""
+        if not message_list:
+            return 0.0
+        
+        msg = message_list[-1]  # Take most recent
+        if isinstance(msg, (int, float)):
+            return float(msg)
+        elif isinstance(msg, torch.Tensor):
+            return msg.item() if msg.numel() == 1 else msg.mean().item()
+        elif isinstance(msg, str):
+            # Convert message strings to activations
+            return self._message_to_activation(msg)
+        else:
+            return 0.0
+    
+    def _neural_outputs_to_messages(self, element_outputs: Dict[str, torch.Tensor]) -> Dict[str, str]:
+        """Convert neural element outputs to ReCoN messages."""
+        messages = {}
+        
+        # Extract activations
+        ic = element_outputs["IC"].item()
+        ir = element_outputs["IR"].item()
+        w = element_outputs["W"].item()
+        c = element_outputs["C"].item()
+        r = element_outputs["R"].item()
+        f = element_outputs["F"].item()
+        
+        # Generate messages based on neural activations (threshold = 0.5)
+        if ir > 0.5:
+            messages["por"] = "inhibit_request"
+        if ic > 0.5:
+            messages["ret"] = "inhibit_confirm"
+        if r > 0.5:
+            messages["sub"] = "request"
+        if c > 0.5:
+            messages["sur"] = "confirm"
+        elif w > 0.5:
+            messages["sur"] = "wait"
+        elif f > 0.5:
+            messages["sur"] = "fail"
+        
+        # Update discrete state for compatibility
+        self._update_state_from_neural_outputs(element_outputs)
+        
+        return messages
+    
+    def _update_state_from_neural_outputs(self, element_outputs: Dict[str, torch.Tensor]):
+        """Update discrete state based on neural ensemble outputs."""
+        ic = element_outputs["IC"].item()
+        ir = element_outputs["IR"].item()
+        w = element_outputs["W"].item()
+        c = element_outputs["C"].item()
+        r = element_outputs["R"].item()
+        f = element_outputs["F"].item()
+        
+        # Map neural pattern to discrete state
+        if c > 0.5:
+            self.state = ReCoNState.CONFIRMED
+        elif f > 0.5:
+            self.state = ReCoNState.FAILED
+        elif r > 0.5 and w > 0.5:
+            self.state = ReCoNState.WAITING
+        elif r > 0.5:
+            self.state = ReCoNState.ACTIVE
+        elif ir > 0.5 and r <= 0.5:
+            self.state = ReCoNState.SUPPRESSED
+        elif w > 0.5:
+            self.state = ReCoNState.REQUESTED
+        else:
+            self.state = ReCoNState.INACTIVE
+        
+        # Update activation for visualization
+        self.activation = max(ic, ir, w, c, r, f)
     
     def _process_hybrid(self, messages: Dict[str, List[Any]]) -> Dict[str, Any]:
         """Process messages with dynamic mode switching."""

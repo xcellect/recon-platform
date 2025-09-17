@@ -40,7 +40,7 @@ class ReCoNArcAngel(Agent):
             try:
                 global ReCoNArcAngelAgent
                 if ReCoNArcAngelAgent is None:
-                    from recon_agents.recon_arc_angel.production_agent import ProductionReCoNArcAngel as ReCoNArcAngelAgent
+                    from recon_agents.recon_arc_angel.improved_production_agent import ImprovedProductionReCoNArcAngel as ReCoNArcAngelAgent
 
                 self.recon_arc_angel_agent = ReCoNArcAngelAgent(self.game_id)
 

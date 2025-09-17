@@ -15,7 +15,7 @@ Request Confirmation Networks for neuro‑symbolic script execution — a faithf
 ## Demo
 
 - Live UI: [demo link] (TBD)
-- Video walkthrough: [video link] (TBD)
+- Video walkthrough: [![ReCoN Platform Demo](https://img.youtube.com/vi/S_MzzxUEFcQ/maxresdefault.jpg)](https://youtu.be/S_MzzxUEFcQ?si=lJVZrC9SaRp405EQ)
 - Short GIF: ![ReCoN Demo](docs/assets/recon-demo.gif) (TBD)
 
 Quick CLI demo (exports data for the UI):

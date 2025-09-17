@@ -1,5 +1,5 @@
 """
-FastAPI Application for ReCoN Platform
+FastAPI Application for ReCon ARC Demo
 
 REST API for creating and executing ReCoN networks.
 Foundation for Phase 3 implementation.
@@ -43,7 +43,7 @@ networks: Dict[str, ReCoNGraph] = {}
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    print("ReCoN Platform API starting up...")
+    print("ReCon ARC Demo API starting up...")
     
     # Create demo network - corrected structure
     demo_id = "demo"
@@ -70,13 +70,13 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
-    print("ReCoN Platform API shutting down...")
+    print("ReCon ARC Demo API shutting down...")
     networks.clear()
 
 
 app = FastAPI(
-    title="ReCoN Platform API",
-    description="REST API for Request Confirmation Networks",
+    title="ReCon ARC Demo API",
+    description="REST API for Request Confirmation Networks - ARC Demo",
     version="0.1.0",
     lifespan=lifespan
 )
@@ -94,7 +94,7 @@ app.add_middleware(
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"message": "ReCoN Platform API", "version": "0.1.0", "networks": len(networks)}
+    return {"message": "ReCon ARC Demo API", "version": "0.1.0", "networks": len(networks)}
 
 
 @app.post("/networks", response_model=NetworkResponse)

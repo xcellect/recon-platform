@@ -51,6 +51,9 @@ class ArconAgent(ReCoNBaseAgent):
         # First frame flag
         self.is_first_frame = True
 
+        # Store ReCoN configuration to apply when state_graph is created
+        self._recon_config = {}
+
         # THEN call parent init (which calls _build_architecture)
         super().__init__(agent_id, game_id)
 
@@ -114,6 +117,11 @@ class ArconAgent(ReCoNBaseAgent):
 
             # Create NEW StateGraph for this game (like original)
             self.state_graph = ArconStateGraph()
+            
+            # Apply stored ReCoN configuration
+            if self._recon_config:
+                self.state_graph.configure_recon(**self._recon_config)
+            
             self.current_state = self.state_graph.get_state(latest_frame)
             self.state_graph.add_init_state(self.current_state)
 
@@ -338,6 +346,10 @@ class ArconAgent(ReCoNBaseAgent):
     
     def configure_recon(self, **kwargs):
         """Configure ReCoN settings for ablation studies."""
+        # Store configuration for when state_graph is created
+        self._recon_config.update(kwargs)
+        
+        # Apply immediately if state_graph already exists
         if self.state_graph:
             self.state_graph.configure_recon(**kwargs)
 

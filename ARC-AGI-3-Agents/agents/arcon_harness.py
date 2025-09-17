@@ -115,7 +115,7 @@ class ArconReCoN(Agent):
                     action_idx = self.arcon_agent._get_rweights_action()
 
                 # Get action data from ReCoN implementation
-                action_data = current_state.get_action_obj(action_idx)
+                action_data = current_state.get_action_obj(action_idx, self.arcon_agent.state_graph)
                 
                 # Update state for next iteration (like original)
                 self.arcon_agent.prev_state = current_state  # This should be a state object, not string

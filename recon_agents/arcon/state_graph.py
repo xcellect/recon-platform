@@ -37,6 +37,19 @@ except ImportError:
 import os
 import json
 from datetime import datetime
+
+# Global run prefix - computed once per module load, not per call
+_ARCON_RUN_PREFIX = None
+
+def _get_arcon_run_prefix() -> str:
+    """Get or create the arcon run prefix. Computed once per process."""
+    global _ARCON_RUN_PREFIX
+    if _ARCON_RUN_PREFIX is None:
+        _ARCON_RUN_PREFIX = os.environ.get(
+            'RECON_LOG_RUN_PREFIX',
+            f"arcon_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+        )
+    return _ARCON_RUN_PREFIX
 def compute_object_penalties(object_data: List[Dict], pxy: Optional[np.ndarray] = None, 
                            grid_size: int = 64, area_frac_cutoff: float = 0.005, 
                            border_penalty: float = 0.8) -> List[float]:
@@ -148,19 +161,19 @@ def create_recon_hypothesis_graph(object_data: List[Dict], pxy: Optional[np.ndar
     verify_step = graph.add_node("verify_change", "script")
     
     graph.add_link("click_hypothesis", "perceive_objects", "sub")
-    graph.add_link("click_hypothesis", "select_step", "sub")
-    graph.add_link("click_hypothesis", "verify_step", "sub")
+    graph.add_link("click_hypothesis", "select_object", "sub")
+    graph.add_link("click_hypothesis", "verify_change", "sub")
     
     # Sequence constraint: perceive -> select -> verify
-    graph.add_link("perceive_objects", "select_step", "por")
-    graph.add_link("select_step", "verify_step", "por")
+    graph.add_link("perceive_objects", "select_object", "por")
+    graph.add_link("select_object", "verify_change", "por")
     
     # Add perception terminal under perceive_objects (fix: script needs children)
     perception_terminal = graph.add_node("perception_ready", "terminal")
     perception_terminal.measurement_fn = lambda env: 0.9  # Always ready to perceive
     graph.add_link("perceive_objects", "perception_ready", "sub")
     
-    # Add object terminals under select_step with real measurements
+    # Add object terminals under select_object with real measurements
     for i, (obj, weight) in enumerate(zip(object_data, object_weights)):
         if weight > 0:
             terminal = graph.add_node(f"object_{i}", "terminal")
@@ -168,12 +181,12 @@ def create_recon_hypothesis_graph(object_data: List[Dict], pxy: Optional[np.ndar
             terminal.measurement_fn = lambda env, obj=obj: _measure_object_quality(obj)
             # Set lower threshold so object measurements can confirm
             terminal.transition_threshold = 0.6
-            graph.add_link("select_step", f"object_{i}", "sub", weight)
+            graph.add_link("select_object", f"object_{i}", "sub", weight)
     
     # Add change verification terminal
     change_terminal = graph.add_node("change_detector", "terminal")
     change_terminal.measurement_fn = lambda env: 0.8  # Placeholder for frame change detection
-    graph.add_link("verify_step", "change_detector", "sub")
+    graph.add_link("verify_change", "change_detector", "sub")
     
     return graph, object_weights
 
@@ -239,6 +252,7 @@ def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float],
     # Execute ReCoN script with history for logging
     history = None
     result = graph.execute_script("score_increase_hypothesis", max_steps=15)
+    
     if log_meta is not None:
         try:
             history = graph.execute_script_with_history("score_increase_hypothesis", max_steps=15)
@@ -281,7 +295,9 @@ def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float],
 
 def _ensure_recon_log_dir_bs(game_id: str, score: Optional[int]) -> str:
     base_dir = "/workspace/recon-platform/recon_log"
-    game_dir = os.path.join(base_dir, f"game_{game_id}")
+    # Use stable per-run prefix - same for entire process/run
+    run_prefix = _get_arcon_run_prefix()
+    game_dir = os.path.join(base_dir, run_prefix, f"game_{game_id}")
     level_dir = os.path.join(game_dir, f"level_{score if score is not None else 'NA'}")
     try:
         os.makedirs(level_dir, exist_ok=True)
@@ -491,6 +507,7 @@ class ArconState:
                 # Use ReCoN click arbiter
                 return self._get_click_action_obj_with_recon(
                     action,
+                    state_graph,
                     use_recon=True,
                     recon_exploration_rate=state_graph.recon_exploration_rate,
                     area_frac_cutoff=state_graph.recon_area_frac_cutoff,
@@ -535,7 +552,8 @@ class ArconState:
             'y': global_y
         }
     
-    def _get_click_action_obj_with_recon(self, action: int, use_recon: bool = False,
+    def _get_click_action_obj_with_recon(self, action: int, state_graph: 'ArconStateGraph' = None,
+                                        use_recon: bool = False,
                                         recon_exploration_rate: float = 0.0,
                                         **recon_kwargs) -> Dict[str, Any]:
         """Generate click action object using ReCoN arbiter if enabled."""

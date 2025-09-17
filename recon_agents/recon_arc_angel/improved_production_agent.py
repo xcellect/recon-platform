@@ -108,10 +108,26 @@ class ImprovedProductionReCoNArcAngel:
         except Exception:
             pass
 
+        # Add per-run prefix to avoid mixing logs across multiple executions
+        # Format: recon_arc_angel_YYYYMMDDTHHMMSSZ
+        try:
+            self._run_prefix = os.environ.get(
+                'RECON_LOG_RUN_PREFIX',
+                f"recon_arc_angel_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}"
+            )
+        except Exception:
+            # Fallback to static prefix if datetime/env fails for any reason
+            self._run_prefix = "recon_arc_angel_run"
+
     def _ensure_recon_log_dir(self, score: Optional[int]) -> str:
         """Ensure per-game and per-level log directories exist and return path."""
         game_id_str = str(self.game_id) if hasattr(self, 'game_id') else "default"
-        game_dir = os.path.join(self._recon_log_base_dir, f"game_{game_id_str}")
+        # Organize logs under per-run prefix to prevent mixing across runs
+        game_dir = os.path.join(
+            self._recon_log_base_dir,
+            self._run_prefix,
+            f"game_{game_id_str}"
+        )
         level_part = f"level_{score if score is not None else 'NA'}"
         level_dir = os.path.join(game_dir, level_part)
         try:

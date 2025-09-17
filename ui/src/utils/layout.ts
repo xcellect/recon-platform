@@ -12,8 +12,8 @@ export interface LayoutOptions {
 const defaultLayoutOptions: LayoutOptions = {
   nodeWidth: 120,
   nodeHeight: 60,
-  horizontalSpacing: 180,
-  verticalSpacing: 100,
+  horizontalSpacing: 200,
+  verticalSpacing: 120,
 };
 
 export function hierarchicalLayout(
@@ -32,6 +32,12 @@ export function hierarchicalLayout(
       ...nodes[0],
       position: { x: 0, y: 0 }
     }];
+  }
+
+  // For large networks, use improved spacing
+  if (nodes.length > 20) {
+    opts.horizontalSpacing = Math.max(150, opts.horizontalSpacing * 0.8);
+    opts.verticalSpacing = Math.max(100, opts.verticalSpacing * 0.9);
   }
 
   // Build adjacency lists for hierarchy detection
@@ -97,20 +103,74 @@ export function hierarchicalLayout(
     }
   });
 
-  // Position nodes with better spacing
+  // Group similar nodes at each level for better organization
+  Object.keys(nodesByLevel).forEach(levelKey => {
+    const level = parseInt(levelKey);
+    const nodesAtLevel = nodesByLevel[level];
+    
+    // Group nodes by type and name patterns
+    const groups: Record<string, string[]> = {};
+    nodesAtLevel.forEach(nodeId => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+      
+      let groupKey = node.type;
+      
+      // Group object terminals together
+      if (nodeId.startsWith('object_')) {
+        groupKey = 'object_terminals';
+      }
+      // Group action terminals together  
+      else if (nodeId.includes('_terminal')) {
+        groupKey = 'action_terminals';
+      }
+      // Group actions together
+      else if (nodeId.startsWith('action_') && !nodeId.includes('_terminal')) {
+        groupKey = 'actions';
+      }
+      
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(nodeId);
+    });
+    
+    // Sort groups by priority (important nodes first)
+    const groupPriority = {
+      'script': 0,
+      'actions': 1, 
+      'action_terminals': 2,
+      'object_terminals': 3,
+      'terminal': 4
+    };
+    
+    const sortedGroups = Object.entries(groups).sort((a, b) => {
+      const priorityA = groupPriority[a[0] as keyof typeof groupPriority] ?? 999;
+      const priorityB = groupPriority[b[0] as keyof typeof groupPriority] ?? 999;
+      return priorityA - priorityB;
+    });
+    
+    // Reorder nodes within level based on groups
+    nodesByLevel[level] = sortedGroups.flatMap(([_, nodeIds]) => nodeIds);
+  });
+
+  // Position nodes with better spacing and grouping
   const positionedNodes = nodes.map(node => {
     const level = levels[node.id];
     const nodesAtLevel = nodesByLevel[level];
     const indexAtLevel = nodesAtLevel.indexOf(node.id);
 
+    // For levels with many nodes, use more compact spacing
+    const levelNodeCount = nodesAtLevel.length;
+    const spacingMultiplier = levelNodeCount > 10 ? 0.7 : 1.0;
+    const effectiveSpacing = opts.horizontalSpacing * spacingMultiplier;
+
     // Center nodes horizontally at each level with better spacing
-    const totalWidth = Math.max(0, (nodesAtLevel.length - 1) * opts.horizontalSpacing);
+    const totalWidth = Math.max(0, (levelNodeCount - 1) * effectiveSpacing);
     const startX = -totalWidth / 2;
 
     return {
       ...node,
       position: {
-        x: startX + indexAtLevel * opts.horizontalSpacing,
+        x: startX + indexAtLevel * effectiveSpacing,
         y: level * opts.verticalSpacing,
       },
     };

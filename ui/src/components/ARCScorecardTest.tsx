@@ -1,32 +1,38 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import SimpleNetworkCanvas from './SimpleNetworkCanvas';
-import { useNetworkStore } from '../stores/networkStore';
 import { reconAPI } from '../services/api';
 
 const ARCScorecardTest: React.FC = () => {
-  // For now, use a default URL - this could be made configurable later
-  const [replayUrl] = useState('https://three.arcprize.org/replay/ft09-f340c8e5138e/872fc28f-ee09-4b7a-a322-42c6a7eac29f');
+  // ARC replay URLs for the specific games
+  const gameUrls = {
+    'arcon_as66': 'https://three.arcprize.org/replay/as66-821a4dcad9c2/42783fed-c5e5-4a62-b32f-c200eb8c050f',
+    'recon_arc_angel_vc33': 'https://three.arcprize.org/replay/vc33-6ae7bf49eea5/c8b90da1-beee-49f7-a885-c50edc35adab'
+  };
   
-  // ReCoN network state
+  // Local network state (independent of shared store)
+  const [availableNetworks, setAvailableNetworks] = useState<Array<{id: string, name: string}>>([]);
+  const [selectedNetworkId, setSelectedNetworkId] = useState<string>('');
+  const [currentNetwork, setCurrentNetwork] = useState<any>(null);
+  const [, setSelectedNode] = useState<any>(null);
+  const [, setSelectedLink] = useState<any>(null);
+  const [replayUrl, setReplayUrl] = useState('https://three.arcprize.org/replay/ft09-f340c8e5138e/872fc28f-ee09-4b7a-a322-42c6a7eac29f');
   const [executionHistory, setExecutionHistory] = useState<any[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(0.5);
   const [selectedRootNode, setSelectedRootNode] = useState('Root');
-  const { currentNetwork, loadNetwork, selectNode, selectLink } = useNetworkStore();
 
-  // ReCoN network handlers
+  // ReCoN network handlers (local state)
   const handleNodeSelect = useCallback((id: string | null) => {
-    const { currentNetwork } = useNetworkStore.getState();
-    selectNode(id ? (currentNetwork?.nodes.find(n => n.id === id) || null) : null);
-  }, [selectNode]);
+    setSelectedNode(id ? (currentNetwork?.nodes.find((n: any) => n.id === id) || null) : null);
+    setSelectedLink(null);
+  }, [currentNetwork]);
 
   const handleEdgeSelect = useCallback((edgeId: string | null) => {
     if (!edgeId) { 
-      selectLink(null); 
+      setSelectedLink(null); 
       return; 
     }
-    const { currentNetwork } = useNetworkStore.getState();
     
     // Handle combined edges (same logic as in App.tsx)
     if (edgeId.endsWith('-sub/sur')) {
@@ -35,11 +41,11 @@ const ARCScorecardTest: React.FC = () => {
       if (dashIndex > 0) {
         const source = basePart.substring(0, dashIndex);
         const target = basePart.substring(dashIndex + 1);
-        const subLink = currentNetwork?.links.find(l => l.source === source && l.target === target && l.type === 'sub');
-        const surLink = currentNetwork?.links.find(l => l.source === target && l.target === source && l.type === 'sur');
+        const subLink = currentNetwork?.links.find((l: any) => l.source === source && l.target === target && l.type === 'sub');
+        const surLink = currentNetwork?.links.find((l: any) => l.source === target && l.target === source && l.type === 'sur');
         
         if (subLink && surLink) {
-          selectLink({
+          setSelectedLink({
             id: edgeId,
             source: source,
             target: target,
@@ -47,7 +53,7 @@ const ARCScorecardTest: React.FC = () => {
             weight: subLink.weight,
             _subLink: subLink,
             _surLink: surLink,
-          } as any);
+          });
         }
       }
     } else if (edgeId.endsWith('-por/ret')) {
@@ -56,11 +62,11 @@ const ARCScorecardTest: React.FC = () => {
       if (dashIndex > 0) {
         const source = basePart.substring(0, dashIndex);
         const target = basePart.substring(dashIndex + 1);
-        const porLink = currentNetwork?.links.find(l => l.source === source && l.target === target && l.type === 'por');
-        const retLink = currentNetwork?.links.find(l => l.source === target && l.target === source && l.type === 'ret');
+        const porLink = currentNetwork?.links.find((l: any) => l.source === source && l.target === target && l.type === 'por');
+        const retLink = currentNetwork?.links.find((l: any) => l.source === target && l.target === source && l.type === 'ret');
         
         if (porLink && retLink) {
-          selectLink({
+          setSelectedLink({
             id: edgeId,
             source: source,
             target: target,
@@ -68,15 +74,15 @@ const ARCScorecardTest: React.FC = () => {
             weight: porLink.weight,
             _porLink: porLink,
             _retLink: retLink,
-          } as any);
+          });
         }
       }
     } else {
       // Single link
-      const link = currentNetwork?.links.find(l => `${l.source}-${l.target}-${l.type}` === edgeId) || null;
-      selectLink(link as any);
+      const link = currentNetwork?.links.find((l: any) => `${l.source}-${l.target}-${l.type}` === edgeId) || null;
+      setSelectedLink(link);
     }
-  }, [selectLink]);
+  }, [currentNetwork]);
 
   // Control panel handlers
   const handlePlay = () => {
@@ -96,51 +102,96 @@ const ARCScorecardTest: React.FC = () => {
     setPlaying(false);
   };
 
-  const handleRequestRoot = async () => {
-    if (!currentNetwork || !selectedRootNode) return;
-
+  const handleNetworkSelect = async (networkId: string) => {
     try {
-      // Get current client network state and execute directly
-      const store = useNetworkStore.getState();
-      const networkData = store.exportLocalGraph();
+      setSelectedNetworkId(networkId);
       
-      if (!networkData) {
-        throw new Error('No network data to execute');
-      }
+      // Load parsed network from logs
+      const parsedNetwork = await reconAPI.getParsedNetwork(networkId);
       
-      // Configure terminals with their measurement values
-      const terminalConfigs = currentNetwork.nodes
-        .filter(node => node.type === 'terminal')
-        .map(node => ({
-          node_id: node.id,
-          measurement_value: (node as any).measurementValue || 0.5
-        }));
+      // Convert parsed network to format expected by networkStore
+      const network = {
+        id: parsedNetwork.network_id,
+        nodes: parsedNetwork.nodes.map((node: any) => ({
+          id: node.node_id,
+          type: node.node_type,
+          state: node.state,
+          activation: node.activation,
+          position: { x: 0, y: 0 } // Reset positions to force fresh layout
+        })),
+        links: parsedNetwork.links.map((link: any) => ({
+          id: `${link.source}-${link.target}-${link.link_type}`,
+          source: link.source,
+          target: link.target,
+          type: link.link_type,
+          weight: link.weight
+        })),
+        stepCount: parsedNetwork.step_count,
+        requestedRoots: []
+      };
       
-      console.log('Terminal configs:', terminalConfigs);
+      // Debug: Log the network structure
+      console.log(`Loading ${networkId}:`, {
+        nodes: network.nodes.length,
+        links: network.links.length,
+        porRetLinks: network.links.filter((l: any) => l.type === 'por' || l.type === 'ret').length,
+        linkTypes: [...new Set(network.links.map((l: any) => l.type))]
+      });
       
-      // Execute the current client state directly
-      const response = await reconAPI.executeNetworkDirect(networkData, selectedRootNode, 100, terminalConfigs);
-
-      // Set the execution history for playback
-      setExecutionHistory(response.steps);
+      // Set the network in local state (no shared store interference)
+      setCurrentNetwork(network);
+      
+      // Load execution history from the parsed network
+      const executionHistory = await reconAPI.getParsedNetworkExecutionHistory(networkId);
+      setExecutionHistory(executionHistory.steps);
       setCurrentStep(0);
       setPlaying(false);
+      
+      // Set appropriate root node and replay URL
+      const rootNode = networkId.startsWith('arcon') ? 'score_increase_hypothesis' : 'frame_change_hypothesis';
+      setSelectedRootNode(rootNode);
+      
+      // Set appropriate replay URL
+      const gameUrl = gameUrls[networkId as keyof typeof gameUrls];
+      if (gameUrl) {
+        setReplayUrl(gameUrl);
+      }
     } catch (error) {
-      console.error('Failed to execute script:', error);
+      console.error('Failed to load network:', error);
     }
   };
 
-  // Load demo network on startup
+  const handleRequestRoot = async () => {
+    if (!currentNetwork || !selectedRootNode) return;
+
+    // For parsed networks, we already have execution history - just reset to beginning
+    if (executionHistory.length > 0) {
+      setCurrentStep(0);
+      setPlaying(false);
+      return;
+    }
+  };
+
+  // Load available parsed networks on startup but don't auto-select
   useEffect(() => {
-    const loadDemoNetwork = async () => {
+    const loadAvailableNetworks = async () => {
       try {
-        await loadNetwork('demo');
+        // Load parsed networks from logs
+        const parsedNetworks = await reconAPI.listParsedNetworks();
+        setAvailableNetworks(parsedNetworks.map(n => ({ id: n.id, name: n.name })));
+        
+        // Only load first network if no network is currently selected
+        if (parsedNetworks.length > 0 && !selectedNetworkId) {
+          setSelectedNetworkId(parsedNetworks[0].id);
+          await handleNetworkSelect(parsedNetworks[0].id);
+        }
       } catch (error) {
-        console.error('Failed to load demo network:', error);
+        console.error('Failed to load networks:', error);
+        setAvailableNetworks([]);
       }
     };
-    loadDemoNetwork();
-  }, [loadNetwork]);
+    loadAvailableNetworks();
+  }, [selectedNetworkId]);
 
   // Auto-play through execution history
   useEffect(() => {
@@ -165,16 +216,33 @@ const ARCScorecardTest: React.FC = () => {
               currentStep={currentStep}
               onNodeSelect={handleNodeSelect}
               onEdgeSelect={handleEdgeSelect}
+              networkOverride={currentNetwork}
             />
           </div>
           
           {/* Minimal Toolbar under ReCoN Network */}
           <div className="bg-gray-800 border-t border-gray-700 p-3">
             <div className="flex items-center justify-between">
-              {/* Left: Execution Controls */}
+              {/* Left: Network and Execution Controls */}
               <div className="flex items-center gap-2">
-                {/* Root Selection */}
+                {/* Network Selection */}
                 <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-gray-300">Network:</label>
+                  <select
+                    value={selectedNetworkId}
+                    onChange={(e) => handleNetworkSelect(e.target.value)}
+                    className="px-2 py-1 border border-gray-600 rounded text-xs bg-gray-700 text-white"
+                  >
+                    {availableNetworks.map(network => (
+                      <option key={network.id} value={network.id}>
+                        {network.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Root Selection */}
+                {/* <div className="flex items-center gap-2">
                   <label className="text-xs font-medium text-gray-300">Root:</label>
                   <select
                     value={selectedRootNode}
@@ -182,21 +250,21 @@ const ARCScorecardTest: React.FC = () => {
                     className="px-2 py-1 border border-gray-600 rounded text-xs bg-gray-700 text-white"
                   >
                     {currentNetwork?.nodes
-                      .filter(node => node.type === 'script')
-                      .map(node => (
+                      .filter((node: any) => node.type === 'script')
+                      .map((node: any) => (
                         <option key={node.id} value={node.id}>
                           {node.id}
                         </option>
                       )) || []}
                   </select>
-                </div>
+                </div> */}
 
                 {/* Request Root Button */}
                 <button
                   onClick={handleRequestRoot}
                   className="px-3 py-1 bg-red-600 text-white rounded text-xs hover:bg-red-700"
                 >
-                  Request
+                  Replay
                 </button>
               </div>
 

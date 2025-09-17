@@ -30,17 +30,23 @@ function App() {
     });
   }, [addNode]);
 
-  // Load demo network on startup
+  // Load demo network only once on initial startup
+  const [hasLoadedInitial, setHasLoadedInitial] = useState(false);
+  
   useEffect(() => {
     const loadDemoNetwork = async () => {
+      if (hasLoadedInitial) return;
+      
       try {
         await loadNetwork('demo');
+        setHasLoadedInitial(true);
       } catch (error) {
         console.error('Failed to load demo network:', error);
       }
     };
+    
     loadDemoNetwork();
-  }, [loadNetwork]);
+  }, [loadNetwork, hasLoadedInitial]);
 
   const renderTabContent = () => {
     switch (activeTab) {

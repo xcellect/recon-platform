@@ -1,6 +1,6 @@
 // API client for ReCoN Platform backend
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8001';
 
 export interface NodeCreateRequest {
   node_id: string;
@@ -291,6 +291,37 @@ class ReCoNAPI {
 
     if (!response.ok) {
       throw new Error(`Failed to fail node: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  // Parsed networks from ReCoN logs
+  async listParsedNetworks(): Promise<Array<{id: string, name: string, filename: string}>> {
+    const response = await fetch(`${this.baseUrl}/parsed-networks`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to list parsed networks: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getParsedNetwork(networkId: string): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/parsed-networks/${networkId}`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get parsed network: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getParsedNetworkExecutionHistory(networkId: string): Promise<ExecutionHistoryResponse> {
+    const response = await fetch(`${this.baseUrl}/parsed-networks/${networkId}/execution-history`);
+
+    if (!response.ok) {
+      throw new Error(`Failed to get parsed network execution history: ${response.statusText}`);
     }
 
     return response.json();

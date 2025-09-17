@@ -24,15 +24,20 @@ interface SimpleNetworkCanvasProps {
   onEdgeSelect?: (edgeId: string | null) => void;
   executionHistory?: any[];
   currentStep?: number;
+  networkOverride?: any; // Override for local network state
 }
 
 export default function SimpleNetworkCanvas({
   onNodeSelect,
   onEdgeSelect,
   executionHistory = [],
-  currentStep = 0
+  currentStep = 0,
+  networkOverride
 }: SimpleNetworkCanvasProps) {
-  const { currentNetwork, addLink, updateNode } = useNetworkStore();
+  const { currentNetwork: storeNetwork, addLink, updateNode } = useNetworkStore();
+  
+  // Use override network if provided, otherwise use store network
+  const currentNetwork = networkOverride || storeNetwork;
   
   // Track if layout has been applied to prevent multiple layout passes
   const layoutAppliedRef = useRef<string | null>(null);
@@ -45,14 +50,27 @@ export default function SimpleNetworkCanvas({
   const reactFlowNodes = useMemo(() => {
     if (!currentNetwork?.nodes) return [];
 
-    return currentNetwork.nodes.map(node => {
+    return currentNetwork.nodes.map((node: any) => {
       // Use execution history state if available, otherwise use base state
       const currentState = currentStepData?.states?.[node.id] || node.state;
+
+      // For networkOverride, apply simple layout if positions are all zero
+      let position = node.position;
+      if (networkOverride && node.position.x === 0 && node.position.y === 0) {
+        const nodeIndex = currentNetwork.nodes.findIndex((n: any) => n.id === node.id);
+        const cols = Math.ceil(Math.sqrt(currentNetwork.nodes.length));
+        const row = Math.floor(nodeIndex / cols);
+        const col = nodeIndex % cols;
+        position = {
+          x: col * 180 - ((cols - 1) * 180) / 2,
+          y: row * 120
+        };
+      }
 
       return {
         id: node.id,
         type: 'reconNode',
-        position: node.position,
+        position: position,
         data: {
           label: `${node.id}\n(${node.type})\n${currentState}`,
           state: currentState,
@@ -60,7 +78,7 @@ export default function SimpleNetworkCanvas({
         }
       };
     });
-  }, [currentNetwork?.nodes, currentStepData]);
+  }, [currentNetwork?.nodes, currentStepData, networkOverride]);
 
   // Memoize React Flow edges to prevent unnecessary re-renders
   const reactFlowEdges = useMemo(() => {
@@ -69,7 +87,7 @@ export default function SimpleNetworkCanvas({
     // Group links by undirected pair to create a single edge per pair
     const pairs = new Map<string, { types: Set<string>; sub?: any; sur?: any; por?: any; ret?: any }>();
 
-    currentNetwork.links.forEach(link => {
+    currentNetwork.links.forEach((link: any) => {
       const key = [link.source, link.target].sort().join('::');
       if (!pairs.has(key)) pairs.set(key, { types: new Set() });
       const entry = pairs.get(key)!;
@@ -82,6 +100,15 @@ export default function SimpleNetworkCanvas({
     pairs.forEach(entry => {
       const hasHier = entry.types.has('sub') || entry.types.has('sur');
       const hasSeq = entry.types.has('por') || entry.types.has('ret');
+      
+      // Debug: Log edge creation
+      if (hasSeq) {
+        console.log('Creating sequential edge:', {
+          types: Array.from(entry.types),
+          por: entry.por ? `${entry.por.source}->${entry.por.target}` : null,
+          ret: entry.ret ? `${entry.ret.source}->${entry.ret.target}` : null
+        });
+      }
 
       if (hasHier) {
         // Orient from parent (sub source) to child (sub target) when available
@@ -121,7 +148,7 @@ export default function SimpleNetworkCanvas({
     });
 
     // gen or other single-direction links (rare)
-    currentNetwork.links.forEach(link => {
+    currentNetwork.links.forEach((link: any) => {
       if (link.type !== 'gen') return;
       edges.push({
         id: `${link.source}-${link.target}-gen`,
@@ -140,27 +167,42 @@ export default function SimpleNetworkCanvas({
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Apply hierarchical layout only once when network changes and nodes need positioning
+  // Apply hierarchical layout when network changes or shouldRelayout is set
   useEffect(() => {
+    // Skip layout if using networkOverride (can't update positions)
+    if (networkOverride) return;
+    
+    const { currentNetwork, shouldRelayout, setShouldRelayout } = useNetworkStore.getState();
+    
     if (!currentNetwork || isLayoutingRef.current) return;
     
     const networkId = currentNetwork.id;
     const hasNodes = currentNetwork.nodes.length > 0;
     const hasLinks = currentNetwork.links.length > 0;
     
-    // Check if layout has already been applied for this network
-    if (layoutAppliedRef.current === networkId) return;
-    
-    // Check if nodes need positioning (all at origin)
-    const needsLayout = hasNodes && currentNetwork.nodes.every(node => 
-      node.position.x === 0 && node.position.y === 0
+    // Check if layout needs to be applied
+    const needsLayout = hasNodes && (
+      // Force layout if shouldRelayout is set
+      shouldRelayout ||
+      // Apply layout if network changed
+      layoutAppliedRef.current !== networkId ||
+      // Apply layout if all nodes are at origin
+      currentNetwork.nodes.every(node => node.position.x === 0 && node.position.y === 0)
     );
     
     if (needsLayout && hasLinks) {
       isLayoutingRef.current = true;
       
       try {
-        const layoutedNodes = hierarchicalLayout(currentNetwork.nodes, currentNetwork.links);
+        console.log(`Applying layout to network ${networkId} (${currentNetwork.nodes.length} nodes, ${currentNetwork.links.length} links)`);
+        
+        // Use improved spacing for large networks
+        const layoutOptions = {
+          horizontalSpacing: currentNetwork.nodes.length > 30 ? 140 : 180,
+          verticalSpacing: currentNetwork.nodes.length > 30 ? 100 : 120
+        };
+        
+        const layoutedNodes = hierarchicalLayout(currentNetwork.nodes, currentNetwork.links, layoutOptions);
         
         // Update positions in batch to avoid multiple re-renders
         layoutedNodes.forEach(node => {
@@ -168,12 +210,20 @@ export default function SimpleNetworkCanvas({
         });
         
         layoutAppliedRef.current = networkId;
+        console.log(`Applied layout to network ${networkId} with ${layoutedNodes.length} nodes`);
+      } catch (error) {
+        console.error('Error applying layout:', error);
       } finally {
         isLayoutingRef.current = false;
       }
     } else if (hasNodes && !hasLinks) {
       // For networks without links, just mark as layout applied
       layoutAppliedRef.current = networkId;
+    }
+    
+    // Reset shouldRelayout flag
+    if (shouldRelayout) {
+      setShouldRelayout(false);
     }
   }, [currentNetwork?.id, currentNetwork?.nodes.length, currentNetwork?.links.length, updateNode]);
 
@@ -273,9 +323,22 @@ export default function SimpleNetworkCanvas({
           nds.forEach(n => store.deleteNode(n.id));
         }}
       >
-        <Controls />
+        <Controls showZoom showFitView showInteractive />
         <MiniMap
-          nodeColor={() => '#dc2626'}
+          style={{ 
+            height: 120, 
+            width: 200,
+            backgroundColor: '#1f2937',
+            border: '1px solid #374151'
+          }}
+          nodeColor={(node) => {
+            const state = (node.data as any)?.state || 'inactive';
+            if (state === 'confirmed') return '#16a34a';
+            if (state === 'failed') return '#dc2626';
+            if (state === 'true') return '#059669';
+            if (state === 'waiting' || state === 'requested') return '#d97706';
+            return '#374151';
+          }}
           nodeStrokeColor={() => '#991b1b'}
           nodeStrokeWidth={2}
           maskColor="rgba(0, 0, 0, 0.6)"

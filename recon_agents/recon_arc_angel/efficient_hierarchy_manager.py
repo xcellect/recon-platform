@@ -15,10 +15,10 @@ Key innovations:
 import torch
 import numpy as np
 import scipy.ndimage
+import os
 from typing import Dict, List, Tuple, Optional
 
 import sys
-import os
 sys.path.insert(0, "/workspace/recon-platform")
 
 from recon_engine.graph import ReCoNGraph
@@ -347,35 +347,82 @@ class EfficientHierarchicalHypothesisManager:
                     click_total_score = click_state_score + click_activation
                     
                     if click_total_score > best_score:
-                        # Find best object coordinate
+                        # Find best object coordinate through ReCoN network
                         best_object_coord = self._find_best_object_coordinate()
                         if best_object_coord is not None:
                             best_score = click_total_score
                             best_action = "action_click"
                             best_coords = best_object_coord
         
+        # Debug logging for ReCoN network state
+        if os.getenv('RECON_DEBUG'):
+            print(f"🔍 ReCoN Network State:")
+            print(f"  Objects detected: {len(self.current_objects)}")
+            print(f"  Available actions: {available_actions}")
+            print(f"  Allowed actions: {allowed_actions}")
+            
+            # Show action node states
+            for i in range(1, 6):
+                action_id = f"action_{i}"
+                if action_id in self.graph.nodes:
+                    node = self.graph.nodes[action_id]
+                    activation = float(node.activation) if hasattr(node, 'activation') else 0.0
+                    print(f"  {action_id}: state={node.state.name}, activation={activation:.3f}")
+            
+            # Show action_click state
+            if "action_click" in self.graph.nodes:
+                click_node = self.graph.nodes["action_click"]
+                click_activation = float(click_node.activation) if hasattr(click_node, 'activation') else 0.0
+                print(f"  action_click: state={click_node.state.name}, activation={click_activation:.3f}")
+                
+                # Show top 3 object states
+                object_scores = []
+                for obj_idx, obj in enumerate(self.current_objects[:5]):  # Show first 5
+                    object_id = f"object_{obj_idx}"
+                    if object_id in self.graph.nodes:
+                        object_node = self.graph.nodes[object_id]
+                        activation = float(object_node.activation) if hasattr(object_node, 'activation') else 0.0
+                        score = obj["regularity"] * obj["area"] + activation
+                        object_scores.append((obj_idx, object_node.state.name, activation, score, obj.get("slice")))
+                
+                print(f"  Top objects:")
+                for obj_idx, state, activation, score, slice_info in object_scores:
+                    print(f"    object_{obj_idx}: state={state}, activation={activation:.3f}, score={score:.3f}, slice={slice_info}")
+            
+            print(f"🎯 Selected: action={best_action}, coords={best_coords}")
+        
         return best_action, best_coords
     
     def _find_best_object_coordinate(self) -> Optional[Tuple[int, int]]:
-        """Find best coordinate from confirmed object terminals"""
+        """Find best coordinate from object terminals through ReCoN network"""
         best_coord = None
         best_score = float('-inf')
         
+        # Use ReCoN network state and activation to select best object
         for obj_idx, obj in enumerate(self.current_objects):
             object_id = f"object_{obj_idx}"
             
             if object_id in self.graph.nodes:
                 object_node = self.graph.nodes[object_id]
                 
-                if object_node.state == ReCoNState.CONFIRMED:
-                    # Score based on object properties and activation
-                    activation = float(object_node.activation) if hasattr(object_node, 'activation') else 0.0
-                    object_score = obj["regularity"] * obj["area"] + activation
-                    
-                    if object_score > best_score:
-                        best_score = object_score
-                        # Get random coordinate within object (BlindSquirrel style)
-                        best_coord = self._get_object_coordinate(obj_idx)
+                # Score based on ReCoN state, activation, and object properties
+                state_priority = {
+                    "CONFIRMED": 4, "TRUE": 3, "WAITING": 2,
+                    "ACTIVE": 1, "REQUESTED": 1, "INACTIVE": 0,
+                    "FAILED": -1, "SUPPRESSED": -1
+                }
+                
+                state_score = state_priority.get(object_node.state.name, 0)
+                if state_score < 0:  # Skip failed/suppressed objects
+                    continue
+                
+                activation = float(object_node.activation) if hasattr(object_node, 'activation') else 0.0
+                object_score = state_score + activation + obj["regularity"] * obj["area"]
+                
+                if object_score > best_score:
+                    best_score = object_score
+                    # Get coordinate within object through ReCoN network
+                    best_coord = self._get_object_coordinate(obj_idx)
         
         return best_coord
     

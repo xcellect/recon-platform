@@ -264,8 +264,9 @@ class ProductionReCoNArcAngel:
             self.hypothesis_manager.propagate_step()
         
         # 🎯 Action selection with object-based coordinates
+        # Pass string names, not enum objects, as the API expects
         best_action, best_coords = self.hypothesis_manager.get_best_action_with_object_coordinates(
-            available_actions=latest_frame.available_actions if hasattr(latest_frame, 'available_actions') else None
+            available_actions=available_names if available_names else None
         )
         
         if best_action is None:
@@ -275,13 +276,29 @@ class ProductionReCoNArcAngel:
                 if hasattr(first_available, 'name'):
                     action_name = first_available.name.lower()
                     if 'action' in action_name:
-                        best_action = action_name.replace('action', 'action_')
+                        if action_name == 'action6':
+                            best_action = "action_click"
+                        else:
+                            best_action = action_name.replace('action', 'action_')
                     else:
                         best_action = "action_1"
                 else:
                     best_action = "action_1"
             else:
                 best_action = "action_1"
+        
+        # Debug log for verification
+        if os.getenv('RECON_DEBUG'):
+            print(f"🎯 Production Agent Action Selection:")
+            print(f"  Available names: {available_names}")
+            print(f"  Selected action: {best_action}")
+            print(f"  Selected coords: {best_coords}")
+            print(f"  Frame score: {latest_frame.score if hasattr(latest_frame, 'score') else 'N/A'}")
+            print(f"  Action count: {self.action_count}")
+            
+            # Visual debug: save frame with crosshair at selected coordinates
+            if best_action == "action_click" and best_coords is not None:
+                self._save_debug_frame(current_frame_tensor, best_coords, self.action_count)
         
         # Convert to game action
         try:
@@ -329,6 +346,64 @@ class ProductionReCoNArcAngel:
             'learning_manager': self.learning_manager.get_stats()
         }
         return stats
+    
+    def _save_debug_frame(self, frame_tensor: torch.Tensor, coords: Tuple[int, int], action_count: int):
+        """Save frame visualization with crosshair at selected coordinates"""
+        try:
+            import matplotlib.pyplot as plt
+            import numpy as np
+            
+            # Convert tensor to numpy array
+            if frame_tensor.dim() == 3:  # (16, 64, 64) one-hot
+                frame_np = frame_tensor.argmax(dim=0).cpu().numpy()
+            else:  # (64, 64)
+                frame_np = frame_tensor.cpu().numpy()
+            
+            # Create visualization
+            fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+            
+            # Show frame with color mapping (0-15 colors)
+            im = ax.imshow(frame_np, cmap='tab20', vmin=0, vmax=15)
+            
+            # Add bold black crosshair at selected coordinates
+            y, x = coords
+            y, x = int(y), int(x)  # Convert from numpy types
+            
+            # Draw crosshair with thick black lines
+            ax.axhline(y=y, color='black', linewidth=3, alpha=0.8)
+            ax.axvline(x=x, color='black', linewidth=3, alpha=0.8)
+            
+            # Add white outline for visibility
+            ax.axhline(y=y, color='white', linewidth=1, alpha=0.9)
+            ax.axvline(x=x, color='white', linewidth=1, alpha=0.9)
+            
+            # Add coordinate text
+            ax.text(x+2, y-2, f'({x},{y})', color='white', fontsize=12, fontweight='bold',
+                   bbox=dict(boxstyle='round', facecolor='black', alpha=0.7))
+            
+            # Set title and labels
+            ax.set_title(f'ReCoN ARC Angel - Action {action_count}\nSelected: action_click at ({x},{y})', 
+                        fontsize=14, fontweight='bold')
+            ax.set_xlabel('X coordinate')
+            ax.set_ylabel('Y coordinate')
+            
+            # Add grid for easier coordinate reading
+            ax.grid(True, alpha=0.3)
+            ax.set_xticks(range(0, 64, 8))
+            ax.set_yticks(range(0, 64, 8))
+            
+            # Save to debug directory
+            debug_dir = '/workspace/recon_debug_frames'
+            os.makedirs(debug_dir, exist_ok=True)
+            
+            filename = f'{debug_dir}/frame_{action_count:04d}_coord_{x}_{y}.png'
+            plt.savefig(filename, dpi=150, bbox_inches='tight')
+            plt.close()
+            
+            print(f"📸 Saved debug frame: {filename}")
+            
+        except Exception as e:
+            print(f"Error saving debug frame: {e}")
     
     def reset(self):
         """Reset agent state"""

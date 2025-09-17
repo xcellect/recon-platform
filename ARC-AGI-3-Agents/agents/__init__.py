@@ -15,6 +15,7 @@ from .templates.smolagents import SmolCodingAgent, SmolVisionAgent
 from .blindsquirrel_recon import BlindSquirrelReCoN
 from .recon_arc_1 import ReCoNArc1
 from .recon_arc_2 import ReCoNArc2
+from .recon_arc_angel import ReCoNArcAngel
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ for rec in Recorder.list():
 AVAILABLE_AGENTS["reasoningagent"] = ReasoningAgent
 AVAILABLE_AGENTS["recon_arc_1"] = ReCoNArc1
 AVAILABLE_AGENTS["recon_arc_2"] = ReCoNArc2
+AVAILABLE_AGENTS["recon_arc_angel"] = ReCoNArcAngel
 
 __all__ = [
     "Swarm",
@@ -50,6 +52,7 @@ __all__ = [
     "BlindSquirrelReCoN",
     "ReCoNArc1",
     "ReCoNArc2",
+    "ReCoNArcAngel",
     "Agent",
     "Recorder",
     "Playback",

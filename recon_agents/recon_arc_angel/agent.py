@@ -320,7 +320,10 @@ class ReCoNArcAngel:
                     # Handle string action names like "ACTION2"
                     if first_available.startswith('ACTION'):
                         action_num = first_available.replace('ACTION', '')
-                        best_action = f"action_{action_num}"
+                        if action_num == '6':
+                            best_action = "action_click"
+                        else:
+                            best_action = f"action_{action_num}"
                     else:
                         best_action = "action_1"
                 else:

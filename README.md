@@ -1,203 +1,185 @@
-# ReCoN Platform - Request Confirmation Networks
+# ReCoN Platform
 
-A complete implementation of Request Confirmation Networks (ReCoNs) based on "Request Confirmation Networks for Neuro-Symbolic Script Execution" (Bach & Herger, 2015).
+Request Confirmation Networks for neuro‑symbolic script execution — a faithful, production‑grade implementation of Bach & Herger (2015) with a modern visualization UI and live ARC‑AGI agent demos.
 
-## 🎯 Mission Accomplished
+• Paper: “Request Confirmation Networks for Neuro‑Symbolic Script Execution” (Bach & Herger, 2015)
 
-**✅ ALL 63 TESTS PASSING** - Perfect theoretical compliance with bonus features!
+## TL;DR
 
-## 🔬 Theoretical Foundation
+- Complete ReCoN engine with exact 8‑state semantics and Table 1 message passing
+- Dynamic React Flow UI for building and executing ReCoN graphs
+- Live demo of ReCoN solving an ARC representation problem via the ARCON agent
+ - Live demos of ReCoN solving ARC representation problems via the ARCON and ReCoN ARC Angel agents
+- Bonus components: hybrid nodes, neural terminals, continuous messages, rich exporters
 
-This platform implements the complete ReCoN specification:
+## Demo
 
-### Core Paper Compliance
-- **8-State Machine**: Complete state transitions per Figure 2
-- **Table 1 Message Passing**: Exact message semantics for all states
-- **Mixed Structures**: Supports Figure 1's combined hierarchy + sequence patterns
-- **Terminal Nodes**: Measurement-based confirmation with 0.8 threshold
-- **Inhibition Mechanisms**: por/ret sequence control and ret confirmation inhibition
+- Live UI: [demo link] (TBD)
+- Video walkthrough: [video link] (TBD)
+- Short GIF: ![ReCoN Demo](docs/assets/recon-demo.gif) (TBD)
 
-### Key Equations Implemented
-- **Compact Rules**: Section 3.1 arithmetic operations for neural integration
-- **Activation Propagation**: z = W · a matrix operations
-- **State Functions**: f_node implementations for all gate types
+Quick CLI demo (exports data for the UI):
 
-## 🚀 Platform Features
+```bash
+python demo_agent_mapping.py
+# writes demo_export.json with React Flow exports and metrics
+```
 
-### 1. Core ReCoN Engine
+Validate ARCON ReCoN integration:
+
+```bash
+python recon_agents/arcon/validate_recon_integration.py
+```
+
+## Alignment with CIMC Option 5
+
+1) Working implementation + dynamic visualization — Completed
+- Core engine implements all paper semantics; 63 tests pass
+- UI provides live execution, state coloring, import/export, and auto‑layout
+
+2) Demonstrate ReCoN solving a representation problem — Completed
+- ARCON reframes “which object to click” as a ReCoN hypothesis: perceive → select → verify; with `exploration_rate=0`, decisions come from the ReCoN script
+- ReCoN ARC Angel uses a CNN terminal to drive `sub/sur` link weights in a hierarchical hypothesis (with `por/ret` sequencing for ACTION6), yielding mask‑aware coordinate selection and background suppression
+
+3) Bonus components — Completed
+- Hybrid nodes (explicit/implicit/neural), PyTorch neural terminals, continuous message protocol, multi‑format exporters, ARC mappings, production UI
+
+## Why ReCoN
+
+ReCoNs execute hierarchical, sequential scripts distributively via stateful nodes and typed links:
+- States: inactive, requested, active, suppressed, waiting, true, confirmed, failed
+- Links: sub/sur (hierarchy), por/ret (sequence)
+- Terminals confirm based on measurements; confirmations aggregate bottom‑up through `sur`
+
+This implementation matches the paper’s Table 1 semantics and supports the compact arithmetic rules for neural integration.
+
+## Engine Overview (`recon_engine/`)
+
+- `node.py`: 8‑state ReCoN node and message processing
+- `graph.py`: Network execution, propagation, execution history, and exporters (React Flow, Cytoscape, D3, Graphviz)
+- `messages.py`: Discrete/continuous message handling
+- `hybrid_node.py`: Hybrid nodes (explicit/implicit/neural) with mode switching
+- `neural_terminal.py`: Wrap PyTorch models as terminals (value, probability, classification, embedding)
+
+Key properties
+- Exact link constraints (terminals: only target by `sub`, source `sur`)
+- por/ret sequence inhibition and timing; sub/sur hierarchy
+- Bottom‑up confirmation scaled by link weights and sender activation
+- Execution history and export for visualization
+
+## ARCON Demo (ARC‑AGI tasks)
+
+Paths:
+- Agent: `recon_agents/arcon/agent.py`
+- State graph + ReCoN hypothesis: `recon_agents/arcon/state_graph.py`
+- Harness adapter: `ARC-AGI-3-Agents/agents/arcon_harness.py`
+
+What’s demonstrated
+- Hypothesis node `score_increase_hypothesis` with two branches: basic actions and click
+- Click branch is a 3‑step script: perceive → select (terminals per object) → verify
+- Object terminals confirm using quality measures; link weights bias bottom‑up confirmation
+
+Recommended demo config
+- Set `exploration_rate=0.0` in `arcon_harness.py` to ensure decisions are made by the ReCoN script
+
+## ReCoN ARC Angel Demo (ARC‑AGI tasks)
+
+Paths:
+- Production agent: `recon_agents/recon_arc_angel/improved_production_agent.py`
+- Improved hierarchy + sequence and mask‑aware coupling: `recon_agents/recon_arc_angel/improved_hierarchy_manager.py`
+- Learning loop (CNN + optional ResNet value): `recon_agents/recon_arc_angel/learning_manager.py`
+- Harness adapter: `ARC-AGI-3-Agents/agents/recon_arc_angel.py`
+
+What’s demonstrated
+- CNN terminal (`CNNValidActionTerminal`) produces action and 64×64 coordinate probabilities that become `sub` link weights
+- Proper ACTION6 sequence: `action_click → click_cnn → click_objects` with `por/ret`
+- Mask‑aware coordinate selection within object masks; background suppression and comprehensive object scoring; stickiness for frame‑change persistence
+- Step‑by‑step execution traces and link snapshots exported to `recon_log/`
+
+Runner note
+- Use the ARC harness with agent `recon_arc_angel` (see adapter above). The agent returns `GameAction` directly.
+
+## How to run both demos (ARC harness)
+
+Prereq (uv):
+
+```bash
+pip install --user uv  # or: curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+From inside `recon-platform/ARC-AGI-3-Agents`:
+
+```bash
+# ReCoN ARC Angel (improved production agent)
+export PATH="$HOME/.local/bin:$PATH" && uv run python main.py -a reconarcangel
+
+# ARCON (ReCoN-backed adapter)
+export PATH="$HOME/.local/bin:$PATH" && uv run python main.py -a arconrecon
+```
+
+Notes:
+- If running as root, use `/root/.local/bin` in PATH as you did.
+- For ARCON, set `exploration_rate=0.0` in `ARC-AGI-3-Agents/agents/arcon_harness.py` to force pure ReCoN selection.
+- ReCoN execution traces are written to `recon_log/` (per game/level step JSON).
+
+## Visualization UI (`ui/`)
+
+- React Flow network canvas with state coloring and live updates
+- Node inspectors (script, terminal, hybrid) and control panel for execution
+- Import/export JSON; supports engine exporters out of the box
+
+Build and run
+
+```bash
+cd ui
+npm install
+npm run dev   # or: npm run build && npx serve -s dist
+```
+
+You can import `demo_export.json` via the UI’s Import panel to browse the pre‑built graphs.
+
+## Quick Start (Engine)
+
 ```python
-from recon_engine import ReCoNGraph, ReCoNNode, ReCoNState
+from recon_engine import ReCoNGraph
 
-# Create hierarchical script
 graph = ReCoNGraph()
 graph.add_node("root", "script")
-graph.add_node("child", "script") 
-graph.add_node("terminal", "terminal")
+graph.add_node("sensor", "terminal")
+graph.add_link("root", "sensor", "sub")
 
-graph.add_link("root", "child", "sub")
-graph.add_link("child", "terminal", "sub")
-
-# Execute with request-confirmation semantics
 graph.request_root("root")
-result = graph.execute_script("root")  # Returns: 'confirmed' or 'failed'
+result = graph.execute_script("root")
+print(result)  # 'confirmed' or 'failed'
 ```
 
-### 2. Sequence Control (por/ret links)
-```python
-# Create sequence: A → B → C with proper inhibition
-graph.add_node("parent", "script")
-for node in ["A", "B", "C"]:
-    graph.add_node(node, "script")
-    graph.add_link("parent", node, "sub")  # All children of parent
+## Install & Tests
 
-# Sequence order control
-graph.add_link("A", "B", "por")  # A inhibits B until A completes
-graph.add_link("B", "C", "por")  # B inhibits C until B completes
-```
-
-### 3. Mixed Hierarchy + Sequence (Figure 1)
-```python
-# Nodes can have both hierarchical AND sequence relationships
-graph.add_link("parent", "node", "sub")    # Hierarchical relationship
-graph.add_link("node", "successor", "por") # Sequence relationship
-# Node receives requests from parent AND controls sequence timing
-```
-
-## 🧠 Bonus Features (Beyond Paper)
-
-### 1. Hybrid Node Architecture
-```python
-# Multi-modal execution support
-node = ReCoNNode("hybrid", node_type="hybrid")
-node.set_execution_mode("neural")    # PyTorch integration
-node.set_execution_mode("implicit")  # Continuous activations
-node.set_execution_mode("explicit")  # Pure symbolic (default)
-```
-
-### 2. Neural Terminal Integration
-```python
-# PyTorch models as measurement functions
-terminal = ReCoNNode("vision", node_type="terminal")
-terminal.neural_model = ConvolutionalModel()
-terminal.measurement_fn = custom_neural_measurement
-
-# Supports CNN, transformers, any PyTorch model
-```
-
-### 3. Enhanced Message Protocol
-```python
-# Auto-converts between discrete and continuous
-discrete_msg = "request"
-continuous = node.message_to_activation(discrete_msg)  # → 1.0
-
-tensor_msg = torch.tensor([0.8, 0.2])
-discrete = node.activation_to_message(tensor_msg, "sub")  # → "request"
-```
-
-### 4. ARC-AGI Integration Patterns
-```python
-# Hierarchical pattern recognition for ARC-AGI tasks
-graph.add_node("pattern_detector", "hybrid")   # Neural mode
-graph.add_node("transformation", "hybrid")     # Implicit mode  
-graph.add_node("output_generator", "terminal") # Standard terminal
-
-# Supports 8x8 grid processing, winner architecture patterns
-```
-
-## 📊 Test Coverage
-
-### Comprehensive Test Suite
-- **State Machine Tests**: All 8 states and transitions
-- **Message Passing Tests**: Table 1 compliance verification  
-- **Hierarchy Tests**: sub/sur relationship semantics
-- **Sequence Tests**: por/ret inhibition and ordering
-- **Hybrid Tests**: Multi-modal execution modes
-- **Integration Tests**: Complex mixed structures
-
-### Theoretical Validation
 ```bash
-pytest tests/ -v
-# 63 passed, 0 failed - Perfect compliance!
+pip install -r requirements.txt
+pytest -q
 ```
 
-## 🏗️ Architecture
+Status: **132 tests passing** (state machine, message passing, hierarchy, sequence, hybrid integration, exporters)
 
-### Core Components
-- `node.py`: 8-state ReCoN node with message passing
-- `graph.py`: Network execution and propagation engine
-- `messages.py`: Enhanced message protocol with hybrid support
-- `hybrid_node.py`: Multi-modal execution capabilities
+## Bonus Components
 
-### Advanced Components  
-- `neural_terminal.py`: PyTorch model integration
-- `blindsquirrel_recon.py`: ARC-AGI winner architecture patterns
-- `stochasticgoose_recon.py`: Probabilistic selection mechanisms
+- Hybrid Node Architecture: explicit ↔ implicit ↔ neural, with state‑preserving mode switches
+- Neural Terminals: ResNet/CNN integration, value/probability/classification/embedding outputs
+- Enhanced Message Protocol: auto conversion between discrete messages and tensor activations
+- Exporters: React Flow, Cytoscape, D3, Graphviz; JSON serialization with auto‑layout helpers
 
-## 🎮 Applications
+## Roadmap
 
-### 1. ARC-AGI Pattern Recognition
-```python
-# Hierarchical pattern decomposition
-pattern_graph = create_arc_pattern_detector()
-result = pattern_graph.execute_script("pattern_root")
-```
+- Integrate learned affordance directly into object terminals in ARCON
+- Graph caching and top‑K object pruning for faster click arbitration
+- WebSocket streaming of execution traces to the UI
+- Template library and debugging tools (breakpoints, step‑through)
 
-### 2. Active Perception Systems
-```python
-# Sensorimotor script execution per paper Section 3.2
-perception_graph = create_perception_hierarchy()
-perception_graph.add_visual_terminals(cnn_models)
-```
+## Citation
 
-### 3. Neuro-Symbolic Reasoning
-```python
-# Combine symbolic control with neural perception
-reasoning_graph = ReCoNGraph()
-reasoning_graph.add_symbolic_reasoning_layer()
-reasoning_graph.add_neural_perception_layer()
-```
+Bach, J., & Herger, P. (2015). Request Confirmation Networks for Neuro‑Symbolic Script Execution. Cognitive Architectures Conference.
 
-## 📚 Documentation
+—
 
-- **BONUS_FEATURES.md**: Detailed bonus feature specifications
-- **FINAL_ANALYSIS.md**: Complete implementation analysis
-- **SEQUENCE_TEST_ANALYSIS.md**: Deep dive into sequence test fixes
-
-## 🔬 Research Applications
-
-Perfect for:
-- **Cognitive Architectures**: MicroPsi-style agent development
-- **Active Perception**: Visual attention and sensorimotor learning
-- **Neuro-Symbolic AI**: Combining neural networks with symbolic reasoning
-- **ARC-AGI Research**: Competition-winning architecture foundations
-
-## 🏆 Achievement
-
-This implementation demonstrates that **academic papers can be faithfully implemented while adding practical extensions**. The platform maintains perfect theoretical rigor (100% test compliance) while providing modern capabilities for real-world AI applications.
-
-**Ready for building ReCoN-based systems that support ARC AGI type active perception learning!**
-
-## 🚀 Quick Start
-
-```python
-from recon_engine import ReCoNGraph, ReCoNNode
-
-# Create your first ReCoN network
-graph = ReCoNGraph()
-root = graph.add_node("hypothesis", "script")
-measurement = graph.add_node("sensor", "terminal")
-graph.add_link("hypothesis", "sensor", "sub")
-
-# Execute request-confirmation cycle
-graph.request_root("hypothesis")
-result = graph.execute_script("hypothesis")
-print(f"Hypothesis validation: {result}")  # 'confirmed' or 'failed'
-```
-
-## 📖 Citation
-
-Based on: Bach, J., & Herger, P. (2015). Request Confirmation Networks for Neuro-Symbolic Script Execution. *Cognitive Architectures Conference*.
-
----
-
-**The future of neuro-symbolic AI starts here.** 🧠🤖
+Built for neuro‑symbolic research and practical demos of ReCoN in action.

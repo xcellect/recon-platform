@@ -1,5 +1,5 @@
 """
-BlindSquirrel State Graph Implementation
+Arcon State Graph Implementation
 
 Implements state tracking and graph management using ReCoN architecture.
 """
@@ -14,7 +14,7 @@ from recon_agents.base_agent import StateTracker
 from recon_engine import ReCoNGraph
 from recon_engine.hybrid_node import HybridReCoNNode, NodeMode
 from recon_engine.node import ReCoNNode
-from .models import BlindSquirrelActionModel, BlindSquirrelTrainer, ActionEncoder
+from .models import ArconActionModel, ArconTrainer, ActionEncoder
 
 # Import GameAction for action availability checks
 # Try multiple import paths to handle different contexts
@@ -44,7 +44,7 @@ def compute_object_penalties(object_data: List[Dict], pxy: Optional[np.ndarray] 
     Compute penalty-weighted scores for objects using ReCoN bottom-up evidence.
     
     Args:
-        object_data: List of object dictionaries from BlindSquirrelState
+        object_data: List of object dictionaries from ArconState
         pxy: Optional 2D click probability heatmap (64x64 or grid_size x grid_size)
         grid_size: Size of the grid (default 64 for ARC)
         area_frac_cutoff: Minimum area fraction to include object
@@ -179,7 +179,7 @@ def create_recon_hypothesis_graph(object_data: List[Dict], pxy: Optional[np.ndar
 
 
 def _measure_action_value(env, action_idx: int, value_model) -> float:
-    """Measure action value using BlindSquirrel value model."""
+    """Measure action value using Arcon value model."""
     try:
         if value_model and hasattr(value_model, 'predict_value'):
             # Use actual value model prediction
@@ -305,7 +305,7 @@ def _write_recon_trace_bs(history: Optional[Dict[str, Any]],
 
         payload = {
             "meta": {
-                "agent": "BlindSquirrelReCoN",
+                "agent": "ArconReCoN",
                 "game_id": game_id,
                 "score": score,
                 "action_count": step_ix,
@@ -324,9 +324,9 @@ def _write_recon_trace_bs(history: Optional[Dict[str, Any]],
         pass
 
 
-class BlindSquirrelState:
+class ArconState:
     """
-    Represents a game state in BlindSquirrel's state graph.
+    Represents a game state in Arcon's state graph.
 
     Equivalent to original State class but integrates with ReCoN.
     """
@@ -469,7 +469,7 @@ class BlindSquirrelState:
         """Get action encoding tensor for the given action index."""
         return ActionEncoder.encode_action(action, self.object_data)
 
-    def get_action_obj(self, action: int, state_graph: 'BlindSquirrelStateGraph' = None) -> Any:
+    def get_action_obj(self, action: int, state_graph: 'ArconStateGraph' = None) -> Any:
         """Convert action index to action object for the harness."""
         # This will be handled by the harness adapter
         # Return action data that the adapter can convert
@@ -606,7 +606,7 @@ class BlindSquirrelState:
 
     def __eq__(self, other):
         """Equality based on game_id, score, and frame."""
-        if not isinstance(other, BlindSquirrelState):
+        if not isinstance(other, ArconState):
             return NotImplemented
         return (self.game_id, self.score, self.frame) == (other.game_id, other.score, other.frame)
 
@@ -615,7 +615,7 @@ class BlindSquirrelState:
         return hash((self.game_id, self.score, self.frame))
 
 
-class BlindSquirrelStateGraph:
+class ArconStateGraph:
     """
     State graph implementation using ReCoN architecture.
 
@@ -663,9 +663,9 @@ class BlindSquirrelStateGraph:
         # Connect nodes
         self.recon_graph.add_link("state_validator", "transition_tracker", "por")
 
-    def get_state(self, latest_frame: Any) -> BlindSquirrelState:
+    def get_state(self, latest_frame: Any) -> ArconState:
         """Get or create state for the given frame."""
-        new_state = BlindSquirrelState(latest_frame)
+        new_state = ArconState(latest_frame)
 
         # Check if state already exists
         existing_state = next((s for s in self.states if s == new_state), None)
@@ -676,13 +676,13 @@ class BlindSquirrelStateGraph:
         self.states.add(new_state)
         return new_state
 
-    def add_init_state(self, state: BlindSquirrelState):
+    def add_init_state(self, state: ArconState):
         """Set the initial state and add as milestone."""
         self.init_state = state
         self.add_milestone(state)
         self.game_id = state.game_id
 
-    def add_milestone(self, state: BlindSquirrelState):
+    def add_milestone(self, state: ArconState):
         """Add a milestone state (level completion)."""
         key = (state.game_id, state.score)
         if key in self.milestones:
@@ -690,7 +690,7 @@ class BlindSquirrelStateGraph:
         else:
             self.milestones[key] = state
 
-    def update(self, prev_state: BlindSquirrelState, action: int, new_state: BlindSquirrelState):
+    def update(self, prev_state: ArconState, action: int, new_state: ArconState):
         """Update state graph with new transition."""
         game_id = prev_state.game_id
         score = prev_state.score
@@ -739,8 +739,8 @@ class BlindSquirrelStateGraph:
             self.action_counter[counter_key][1] += 1
             prev_state.action_rweights[action] = 1
 
-    def get_level_training_data(self, old_milestone: BlindSquirrelState,
-                              new_milestone: BlindSquirrelState) -> List[Dict]:
+    def get_level_training_data(self, old_milestone: ArconState,
+                              new_milestone: ArconState) -> List[Dict]:
         """Generate training data for model between two milestones."""
         if new_milestone.frame == 'WIN':
             final_frame = new_milestone.frame
@@ -829,8 +829,8 @@ class BlindSquirrelStateGraph:
         """Train the action value model."""
         # Always create fresh model like original implementation
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.action_model = BlindSquirrelActionModel(game_id).to(device)
-        self.trainer = BlindSquirrelTrainer(self.action_model)
+        self.action_model = ArconActionModel(game_id).to(device)
+        self.trainer = ArconTrainer(self.action_model)
 
         # Collect training data from all levels
         training_data = []
@@ -852,7 +852,7 @@ class BlindSquirrelStateGraph:
             if verbose:
                 print("No training data available")
 
-    def predict_action_value(self, state: BlindSquirrelState, action: int) -> float:
+    def predict_action_value(self, state: ArconState, action: int) -> float:
         """Predict value for state-action pair."""
         if self.trainer is None:
             return 0.0

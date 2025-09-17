@@ -1,7 +1,5 @@
 """
-BlindSquirrel Neural Models
-
-Implements the exact neural architecture from the 2nd place ARC-AGI-3 winner.
+Arcon Neural Models
 """
 
 import torch
@@ -14,10 +12,8 @@ from typing import Dict, Any, List, Tuple, Optional
 import numpy as np
 
 
-class BlindSquirrelActionModel(nn.Module):
+class ArconActionModel(nn.Module):
     """
-    Exact ActionModel from BlindSquirrel implementation.
-
     Uses ResNet-18 backbone with custom stem and dual-head architecture
     for state-action value prediction.
     """
@@ -70,7 +66,7 @@ class BlindSquirrelActionModel(nn.Module):
         )
 
     def forward(self, state, action):
-        """Forward pass matching original BlindSquirrel architecture."""
+        """Forward pass"""
         # Embed grid symbols
         x = self.grid_symbol_embedding(state)
         x = x.permute(0, 3, 1, 2)  # (B, 64, 64, 16) -> (B, 16, 64, 64)
@@ -121,10 +117,10 @@ class ActionModelDataset(Dataset):
         return {"state": state, "action": action, "score": score}
 
 
-class BlindSquirrelTrainer:
-    """Training utilities for BlindSquirrel models."""
+class ArconTrainer:
+    """Training utilities for Arcon models."""
 
-    def __init__(self, model: BlindSquirrelActionModel):
+    def __init__(self, model: ArconActionModel):
         self.model = model
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
@@ -203,7 +199,7 @@ class BlindSquirrelTrainer:
 
 class ActionEncoder:
     """
-    Encodes actions into 26-dimensional tensors matching BlindSquirrel format.
+    Encodes actions into 26-dimensional tensors matching Arcon format.
 
     Action encoding structure:
     - 6 dimensions for action type (ACTION1-5, CLICK)

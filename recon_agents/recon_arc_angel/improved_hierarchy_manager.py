@@ -196,6 +196,18 @@ class ImprovedHierarchicalHypothesisManager:
                 click_objects_node.state = ReCoNState.CONFIRMED
             return result
         click_objects_node.update_state = click_objects_update_state
+        
+        # CRITICAL FIX: Also override action_click to ensure it can compete with other actions
+        action_click_node = self.graph.get_node("action_click")
+        original_update_state_click = action_click_node.update_state
+        def action_click_update_state(inputs=None):
+            result = original_update_state_click(inputs)
+            # Force confirmation after a brief wait to compete with other actions
+            if action_click_node.state.name == "WAITING":
+                from recon_engine.node import ReCoNState
+                action_click_node.state = ReCoNState.CONFIRMED
+            return result
+        action_click_node.update_state = action_click_update_state
     
     def extract_objects_from_frame(self, frame: torch.Tensor) -> List[dict]:
         """
@@ -459,14 +471,23 @@ class ImprovedHierarchicalHypothesisManager:
         action_probs = result["action_probabilities"]
         coord_probs = result["coordinate_probabilities"]  # 64x64
         
-        # Update basic action weights (root → action_i)
+        # Update basic action weights (root → action_i) with exploration balancing
+        # CRITICAL FIX: Apply exploration to prevent ACTION1 dominance
         for i in range(5):
             action_id = f"action_{i + 1}"
-            weight = float(action_probs[i])
+            raw_weight = float(action_probs[i])
+            
+            # Apply exploration factor to encourage trying other actions
+            exploration_factor = 0.3  # 30% exploration
+            uniform_weight = 0.2  # Equal probability for all 5 actions
+            balanced_weight = (1 - exploration_factor) * raw_weight + exploration_factor * uniform_weight
+            
+            # Ensure minimum viable weight for all actions
+            final_weight = max(0.1, balanced_weight)
             
             for link in self.graph.get_links(source="frame_change_hypothesis", target=action_id):
                 if link.type == "sub":
-                    link.weight = weight
+                    link.weight = final_weight
         
         # Update object weights using masked max CNN probabilities
         total_click_prob = 0.0
@@ -575,6 +596,9 @@ class ImprovedHierarchicalHypothesisManager:
         best_coords = None
         best_obj_idx = None
         
+        # Collect all viable actions with scores for balanced selection
+        action_candidates = []
+        
         # Check basic actions (1-5)
         for i in range(1, 6):
             action_id = f"action_{i}"
@@ -590,15 +614,26 @@ class ImprovedHierarchicalHypothesisManager:
                     continue
                 
                 activation = float(node.activation) if hasattr(node, 'activation') else 0.0
-                total_score = state_score + activation
                 
-                if total_score > best_score:
-                    best_score = total_score
-                    best_action = action_id
-                    best_coords = None
-                    best_obj_idx = None
+                # Get original CNN probability (not balanced weight) for proper scoring
+                link_weight = 0.0
+                for link in self.graph.get_links(source="frame_change_hypothesis", target=action_id):
+                    if link.type == "sub":
+                        # Reverse the exploration balancing to get original CNN weight
+                        balanced_weight = float(link.weight)
+                        # balanced_weight = (1 - 0.3) * raw_weight + 0.3 * 0.2
+                        # Solve for raw_weight: raw_weight = (balanced_weight - 0.06) / 0.7
+                        raw_weight = max(0.0, (balanced_weight - 0.06) / 0.7)
+                        link_weight = raw_weight
+                        break
+                
+                # Score based on state + CNN preference with controlled weighting
+                cnn_score = link_weight * 3.0  # Scale CNN influence
+                total_score = state_score + activation + cnn_score
+                
+                action_candidates.append((action_id, total_score, None, None))
         
-        # Check action_click with comprehensive object scoring
+        # Add action_click as candidate if viable
         if "action_click" in self.graph.nodes:
             if not available_actions or "action_click" in allowed_actions:
                 click_node = self.graph.nodes["action_click"]
@@ -607,9 +642,12 @@ class ImprovedHierarchicalHypothesisManager:
                 if click_state_score >= 0:
                     click_activation = float(click_node.activation) if hasattr(click_node, 'activation') else 0.0
                     
-                    # Find best object using top-K probabilistic selection
-                    object_scores = []
+                    # Find best object for ACTION6
+                    best_object_coord = None
+                    best_selected_obj_idx = None
+                    best_object_score = 0.0
                     
+                    # Simple object selection for ACTION6
                     for obj_idx, obj in enumerate(self.current_objects):
                         object_id = f"object_{obj_idx}"
                         
@@ -624,49 +662,34 @@ class ImprovedHierarchicalHypothesisManager:
                             # Scale CNN probability to prevent score collapse
                             scaled_prob = min(1.0, masked_max_prob * 4096)  # Fix CNN scaling
                             
-                            # Only consider objects with decent scaled probability (prevents ACTION6 coords=None)
-                            if scaled_prob < 0.15:
-                                continue
-                            
-                            # Calculate comprehensive score with scaled probability
-                            obj_score = self.calculate_comprehensive_object_score(obj_idx, scaled_prob)
-                            
-                            if obj_score > 0:  # Only consider objects with positive scores
-                                object_scores.append((obj_idx, obj_score, scaled_prob))
+                            # Only consider objects with decent scaled probability
+                            if scaled_prob >= 0.15:
+                                obj_score = self.calculate_comprehensive_object_score(obj_idx, scaled_prob)
+                                if obj_score > best_object_score:
+                                    best_object_score = obj_score
+                                    best_selected_obj_idx = obj_idx
+                                    best_object_coord = self._get_object_coordinate_improved(obj_idx)
                     
-                    # Top-K probabilistic selection to prevent getting stuck
-                    best_object_coord = None
-                    best_selected_obj_idx = None
-                    best_object_score = 0.0
-                    
-                    if object_scores:
-                        # Sort by score and take top K=3
-                        object_scores.sort(key=lambda x: -x[1])
-                        top_k = object_scores[:3]
-                        
-                        if len(top_k) == 1:
-                            # Only one viable object
-                            best_selected_obj_idx = top_k[0][0]
-                        else:
-                            # Probabilistic selection from top-K with small temperature
-                            scores = torch.tensor([score for _, score, _ in top_k])
-                            probs = torch.softmax(scores / 0.5, dim=0)  # Small temperature for exploration
-                            
-                            # Sample from distribution
-                            selected_idx = torch.multinomial(probs, 1).item()
-                            best_selected_obj_idx = top_k[selected_idx][0]
-                        
-                        best_object_score = object_scores[0][1]  # Use best score for total calculation
-                        best_object_coord = self._get_object_coordinate_improved(best_selected_obj_idx)
-                    
-                    # Total click score
-                    click_total_score = click_state_score + click_activation + best_object_score
-                    
-                    if click_total_score > best_score and best_object_coord is not None:
-                        best_score = click_total_score
-                        best_action = "action_click"
-                        best_coords = best_object_coord
-                        best_obj_idx = best_selected_obj_idx
+                    # Add action_click as candidate if it has valid objects
+                    if best_object_coord is not None:
+                        click_total_score = click_state_score + click_activation + best_object_score
+                        action_candidates.append(("action_click", click_total_score, best_object_coord, best_selected_obj_idx))
+        
+        # Select best action from candidates with exploration
+        if action_candidates:
+            # Sort candidates by score
+            action_candidates.sort(key=lambda x: -x[1])
+            
+            # Apply softmax selection with temperature for exploration
+            scores = torch.tensor([score for _, score, _, _ in action_candidates])
+            # Use temperature to control exploration vs exploitation
+            temperature = 0.5  # Lower = more exploitation, higher = more exploration
+            probs = torch.softmax(scores / temperature, dim=0)
+            
+            # Sample from distribution
+            import random
+            selected_idx = torch.multinomial(probs, 1).item()
+            best_action, best_score, best_coords, best_obj_idx = action_candidates[selected_idx]
         
         # Debug logging
         if os.getenv('RECON_DEBUG'):
@@ -675,6 +698,35 @@ class ImprovedHierarchicalHypothesisManager:
             print(f"  Available actions: {available_actions}")
             print(f"  Allowed actions: {allowed_actions}")
             print(f"  Stickiness: {self.stickiness_strength:.3f} at {self.last_click['coords']}, attempts: {self.sticky_attempts}")
+            
+            # CRITICAL DEBUG: Show action node states and weights to diagnose ACTION1 bias
+            print(f"  🎯 Action Node Analysis:")
+            for i in range(1, 6):
+                action_id = f"action_{i}"
+                if action_id in self.graph.nodes:
+                    node = self.graph.nodes[action_id]
+                    # Get link weight from root
+                    link_weight = 0.0
+                    for link in self.graph.get_links(source="frame_change_hypothesis", target=action_id):
+                        if link.type == "sub":
+                            link_weight = float(link.weight)
+                            break
+                    state_score = state_priority.get(node.state.name, 0)
+                    activation = float(node.activation) if hasattr(node, 'activation') else 0.0
+                    total_score = state_score + activation
+                    print(f"    {action_id}: state={node.state.name}, link_weight={link_weight:.4f}, state_score={state_score}, activation={activation:.3f}, total={total_score:.3f}")
+            
+            # Show action_click analysis
+            if "action_click" in self.graph.nodes:
+                click_node = self.graph.nodes["action_click"]
+                click_link_weight = 0.0
+                for link in self.graph.get_links(source="frame_change_hypothesis", target="action_click"):
+                    if link.type == "sub":
+                        click_link_weight = float(link.weight)
+                        break
+                click_state_score = state_priority.get(click_node.state.name, 0)
+                click_activation = float(click_node.activation) if hasattr(click_node, 'activation') else 0.0
+                print(f"    action_click: state={click_node.state.name}, link_weight={click_link_weight:.4f}, state_score={click_state_score}, activation={click_activation:.3f}")
             
             # Show comprehensive object scores
             if self.current_objects:

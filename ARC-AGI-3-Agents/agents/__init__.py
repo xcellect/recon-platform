@@ -12,7 +12,7 @@ from .templates.llm_agents import LLM, FastLLM, GuidedLLM, ReasoningLLM
 from .templates.random_agent import Random
 from .templates.reasoning_agent import ReasoningAgent
 from .templates.smolagents import SmolCodingAgent, SmolVisionAgent
-from .blindsquirrel_recon import BlindSquirrelReCoN
+from .arcon_harness import ArconReCoN
 from .recon_arc_angel import ReCoNArcAngel
 
 load_dotenv()
@@ -45,9 +45,7 @@ __all__ = [
     "ReasoningAgent",
     "SmolCodingAgent",
     "SmolVisionAgent",
-    "BlindSquirrelReCoN",
-    "ReCoNArc1",
-    "ReCoNArc2",
+    "ArconReCoN",
     "ReCoNArcAngel",
     "Agent",
     "Recorder",

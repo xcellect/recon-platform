@@ -120,6 +120,22 @@ class EfficientHierarchicalHypothesisManager:
         self.resnet_terminal.measure = lambda env=None: 0.9 if env is None else self.resnet_terminal._original_measure(env)
         self.graph.add_node(self.resnet_terminal)
         self.graph.add_link("frame_change_hypothesis", "resnet_terminal", "sub", weight=1.0)
+        
+        # CRITICAL FIX: Override basic action scripts to auto-confirm for balanced competition
+        for i in range(1, 6):
+            action_id = f"action_{i}"
+            if action_id in self.graph.nodes:
+                action_node = self.graph.get_node(action_id)
+                original_update = action_node.update_state
+                def make_auto_confirm_update(orig_update, node_ref):
+                    def auto_confirm_update(inputs=None):
+                        result = orig_update(inputs)
+                        if node_ref.state.name == "WAITING":
+                            from recon_engine.node import ReCoNState
+                            node_ref.state = ReCoNState.CONFIRMED
+                        return result
+                    return auto_confirm_update
+                action_node.update_state = make_auto_confirm_update(original_update, action_node)
     
     def extract_objects_from_frame(self, frame: torch.Tensor) -> List[dict]:
         """
@@ -247,14 +263,23 @@ class EfficientHierarchicalHypothesisManager:
         action_probs = result["action_probabilities"]
         coord_probs = result["coordinate_probabilities"]  # 64x64
         
-        # Update action script weights (root → action_i)
+        # Update action script weights (root → action_i) with exploration balancing
+        # CRITICAL FIX: Apply exploration to prevent ACTION1 dominance
         for i in range(5):
             action_id = f"action_{i + 1}"
-            weight = float(action_probs[i])
+            raw_weight = float(action_probs[i])
+            
+            # Apply exploration factor to encourage trying other actions
+            exploration_factor = 0.3  # 30% exploration
+            uniform_weight = 0.2  # Equal probability for all 5 actions
+            balanced_weight = (1 - exploration_factor) * raw_weight + exploration_factor * uniform_weight
+            
+            # Ensure minimum viable weight for all actions
+            final_weight = max(0.1, balanced_weight)
             
             for link in self.graph.get_links(source="frame_change_hypothesis", target=action_id):
                 if link.type == "sub":
-                    link.weight = weight
+                    link.weight = final_weight
         
         # Update object weights based on CNN coordinate probabilities
         total_click_prob = 0.0
@@ -335,7 +360,21 @@ class EfficientHierarchicalHypothesisManager:
                     continue
                 
                 activation = float(node.activation) if hasattr(node, 'activation') else 0.0
-                total_score = state_score + activation
+                
+                # CRITICAL FIX: Include link weight in scoring to reflect CNN preferences
+                # Get link weight from root to this action
+                link_weight = 0.0
+                for link in self.graph.get_links(source="frame_change_hypothesis", target=action_id):
+                    if link.type == "sub":
+                        link_weight = float(link.weight)
+                        break
+                
+                # Balanced scoring: state + activation + link weight + randomization
+                base_score = state_score + activation + (link_weight * 2.0)
+                # Add small random component to break ties and encourage exploration
+                import random
+                random_factor = random.uniform(-0.1, 0.1)  # ±0.1 randomization
+                total_score = base_score + random_factor
                 
                 if total_score > best_score:
                     best_score = total_score

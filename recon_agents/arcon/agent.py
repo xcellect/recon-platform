@@ -1,7 +1,7 @@
 """
-BlindSquirrel Agent Implementation
+Arcon Agent Implementation
 
-Main agent class that implements the BlindSquirrel architecture using ReCoN platform.
+Main agent class that implements the Arcon architecture using ReCoN platform.
 """
 
 import random
@@ -13,13 +13,13 @@ import numpy as np
 from recon_agents.base_agent import ReCoNBaseAgent
 from recon_engine.hybrid_node import HybridReCoNNode, NodeMode
 from recon_engine.neural_terminal import NeuralTerminal
-from .state_graph import BlindSquirrelStateGraph, BlindSquirrelState
-from .models import BlindSquirrelActionModel, ActionEncoder
+from .state_graph import ArconStateGraph, ArconState
+from .models import ArconActionModel, ActionEncoder
 
 
-class BlindSquirrelAgent(ReCoNBaseAgent):
+class ArconAgent(ReCoNBaseAgent):
     """
-    BlindSquirrel agent implemented as a ReCoN application.
+    Arcon agent implemented as a ReCoN application.
 
     Faithfully reproduces the 2nd place ARC-AGI-3 winner architecture
     using the ReCoN platform as the cognitive foundation.
@@ -33,8 +33,8 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
     RWEIGHT_RANK_DISCOUNT = 0.5
     RWEIGHT_NO_DISCOUNT = 0.5
 
-    def __init__(self, agent_id: str = "blindsquirrel", game_id: str = "default"):
-        # Initialize BlindSquirrel-specific state FIRST
+    def __init__(self, agent_id: str = "", game_id: str = "default"):
+        # Initialize Arcon-specific state FIRST
         # NOTE: StateGraph is created per-game, not once in __init__
         self.state_graph = None  # Will be created when game starts
         self.current_state = None
@@ -55,10 +55,10 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
         super().__init__(agent_id, game_id)
 
     def _build_architecture(self):
-        """Build ReCoN graph representing BlindSquirrel architecture."""
+        """Build ReCoN graph representing Arcon architecture."""
 
         # Root controller
-        root = self.add_script_node("blindsquirrel_root")
+        root = self.add_script_node("arcon_root")
 
         # State processing pipeline
         state_processor = self.add_script_node("state_processor")
@@ -69,7 +69,7 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
         rules_branch = self.add_script_node("rules_branch")
 
         # Connect the pipeline
-        self.connect_nodes("blindsquirrel_root", "state_processor", "sub")
+        self.connect_nodes("arcon_root", "state_processor", "sub")
         self.connect_nodes("state_processor", "action_selector", "por")
 
         # Parallel action selection branches
@@ -113,7 +113,7 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
             self.game_id = getattr(latest_frame, 'game_id', 'default')
 
             # Create NEW StateGraph for this game (like original)
-            self.state_graph = BlindSquirrelStateGraph()
+            self.state_graph = ArconStateGraph()
             self.current_state = self.state_graph.get_state(latest_frame)
             self.state_graph.add_init_state(self.current_state)
 
@@ -157,7 +157,7 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
 
 
     def _choose_action(self, frame_data: Any) -> Any:
-        """Choose action using BlindSquirrel strategy."""
+        """Choose action using Arcon strategy."""
         if not self.current_state:
             return self._get_default_action()
 
@@ -345,7 +345,7 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
         """Reset agent to initial state."""
         super().reset()
 
-        # Reset BlindSquirrel-specific state
+        # Reset Arcon-specific state
         self.current_state = None
         self.prev_state = None
         self.prev_action = None
@@ -354,18 +354,18 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
         self.is_first_frame = True
 
         # Keep the state graph but reset current game
-        # (In original BlindSquirrel, the state graph persists across games)
+        # (In original Arcon, the state graph persists across games)
 
 
-def create_blindsquirrel_agent(game_id: str = "test") -> BlindSquirrelAgent:
-    """Factory function to create a BlindSquirrel agent."""
-    return BlindSquirrelAgent("blindsquirrel", game_id)
+def create_arcon_agent(game_id: str = "test") -> ArconAgent:
+    """Factory function to create a Arcon agent."""
+    return ArconAgent("", game_id)
 
 
 # Example usage and testing functions
-def test_blindsquirrel_agent():
-    """Test BlindSquirrel agent functionality."""
-    agent = create_blindsquirrel_agent("test")
+def test_arcon_agent():
+    """Test Arcon agent functionality."""
+    agent = create_arcon_agent("test")
 
     # Mock frame data
     class MockFrame:
@@ -384,11 +384,11 @@ def test_blindsquirrel_agent():
     game_frame = MockFrame("test", 0, [[1] * 64 for _ in range(64)])
     action = agent.process_frame(game_frame)
 
-    print(f"BlindSquirrel agent selected action: {action}")
+    print(f"Arcon agent selected action: {action}")
     print(f"Agent statistics: {agent.get_agent_statistics()}")
 
     return agent
 
 
 if __name__ == "__main__":
-    test_blindsquirrel_agent()
+    test_arcon_agent()

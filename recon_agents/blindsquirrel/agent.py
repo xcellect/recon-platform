@@ -177,7 +177,7 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
 
         # Convert to action object
         try:
-            action_obj = self.current_state.get_action_obj(action_idx)
+            action_obj = self.current_state.get_action_obj(action_idx, self.state_graph)
         except ImportError:
             # Handle GameAction import issue - return fallback
             return self._get_default_action()
@@ -328,6 +328,18 @@ class BlindSquirrelAgent(ReCoNBaseAgent):
             **agent_stats,
             **graph_stats
         }
+    
+    def get_recon_statistics(self) -> Dict[str, Any]:
+        """Get ReCoN-specific statistics for ablation studies."""
+        if self.state_graph:
+            return self.state_graph.get_recon_statistics()
+        else:
+            return {}
+    
+    def configure_recon(self, **kwargs):
+        """Configure ReCoN settings for ablation studies."""
+        if self.state_graph:
+            self.state_graph.configure_recon(**kwargs)
 
     def reset(self):
         """Reset agent to initial state."""

@@ -293,31 +293,39 @@ class ImprovedProductionReCoNArcAngel:
                 action6_available
             )
         
-        # Add experience and state transition for dual training
+        # Add experience and state transition for dual training (with validation)
         if (self.prev_frame_tensor is not None and 
             self.prev_action_type is not None and 
             self.action_count > 0):
             
             try:
-                # CNN experience (StochasticGoose style)
-                added = self.learning_manager.add_experience(
-                    self.prev_frame_tensor, 
-                    current_frame_tensor,
-                    self.prev_action_type,
-                    self.prev_coords
-                )
-                if added:
-                    self.stats['unique_experiences'] += 1
+                # Validate coordinates for ACTION6 before training
+                valid_for_training = True
+                if self.prev_action_type == "action_click" and self.prev_coords is None:
+                    valid_for_training = False
+                    if os.getenv('RECON_DEBUG'):
+                        print(f"  ⚠️  Skipping training for action_click with coords=None")
                 
-                # ResNet state transition (BlindSquirrel style)
-                self.learning_manager.add_state_transition(
-                    self.prev_frame_tensor,
-                    current_frame_tensor, 
-                    self.prev_action_type,
-                    self.prev_coords,
-                    self.game_id,
-                    latest_frame.score if hasattr(latest_frame, 'score') else 0
-                )
+                if valid_for_training:
+                    # CNN experience (StochasticGoose style)
+                    added = self.learning_manager.add_experience(
+                        self.prev_frame_tensor, 
+                        current_frame_tensor,
+                        self.prev_action_type,
+                        self.prev_coords
+                    )
+                    if added:
+                        self.stats['unique_experiences'] += 1
+                    
+                    # ResNet state transition (BlindSquirrel style)
+                    self.learning_manager.add_state_transition(
+                        self.prev_frame_tensor,
+                        current_frame_tensor, 
+                        self.prev_action_type,
+                        self.prev_coords,
+                        self.game_id,
+                        latest_frame.score if hasattr(latest_frame, 'score') else 0
+                    )
                 
             except Exception as e:
                 print(f"Improved ReCoN ARC Angel: Error in dual training: {e}")
@@ -496,6 +504,22 @@ class ImprovedProductionReCoNArcAngel:
             'learning_manager': self.learning_manager.get_stats()
         }
         return stats
+    
+    def is_done(self, frames: List[Any], latest_frame: Any) -> bool:
+        """
+        Check if agent is done playing.
+        
+        Args:
+            frames: List of previous frames
+            latest_frame: Current frame data
+            
+        Returns:
+            True only if game is actually won (not on GAME_OVER)
+        """
+        if hasattr(latest_frame, 'state'):
+            # Only stop on WIN, continue playing even on GAME_OVER until MAX_ACTIONS
+            return latest_frame.state == "WIN"
+        return False
     
     def reset(self):
         """Reset agent state"""

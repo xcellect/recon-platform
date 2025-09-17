@@ -45,6 +45,12 @@ class BlindSquirrelReCoN(Agent):
                     from recon_agents.blindsquirrel.agent import BlindSquirrelAgent
 
                 self.blindsquirrel_agent = BlindSquirrelAgent("blindsquirrel", self.game_id)
+                self.blindsquirrel_agent.configure_recon(
+                    use_click_arbiter=True,
+                    exploration_rate=1,        # 80% random exploration within ReCoN
+                    area_frac_cutoff=0.005,      # Filter objects < 0.5% of grid area
+                    border_penalty=0.8           # 80% weight for border objects
+                )
 
             except Exception as e:
                 print(f"Error initializing BlindSquirrel ReCoN agent: {e}")

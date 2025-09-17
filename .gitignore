@@ -17,3 +17,5 @@ ARC-AGI-3-Agents/recordings/*
 !ARC-AGI-3-Agents/agents/__init__.py
 !ARC-AGI-3-Agents/pyproject.toml
 !ARC-AGI-3-Agents/uv.lock
+
+recon_log*

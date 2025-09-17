@@ -253,3 +253,5 @@ class StableObjectTracker:
             "iou_threshold": self.iou_threshold,
             "next_object_id": self.next_object_id
         }
+
+

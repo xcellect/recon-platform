@@ -17,6 +17,8 @@ import numpy as np
 from typing import List, Optional, Tuple, Any
 import sys
 import os
+import json
+from datetime import datetime
 
 # Add parent directories to path for imports
 sys.path.insert(0, "/workspace/recon-platform")
@@ -97,6 +99,89 @@ class ImprovedProductionReCoNArcAngel:
             'sticky_selections': 0,
             'action6_coord_none_prevented': 0
         }
+
+        # ReCoN execution trace logging
+        # Base directory for per-game/level step-by-step ReCoN traces
+        self._recon_log_base_dir = "/workspace/recon-platform/recon_log"
+        try:
+            os.makedirs(self._recon_log_base_dir, exist_ok=True)
+        except Exception:
+            pass
+
+    def _ensure_recon_log_dir(self, score: Optional[int]) -> str:
+        """Ensure per-game and per-level log directories exist and return path."""
+        game_id_str = str(self.game_id) if hasattr(self, 'game_id') else "default"
+        game_dir = os.path.join(self._recon_log_base_dir, f"game_{game_id_str}")
+        level_part = f"level_{score if score is not None else 'NA'}"
+        level_dir = os.path.join(game_dir, level_part)
+        try:
+            os.makedirs(level_dir, exist_ok=True)
+        except Exception:
+            pass
+        return level_dir
+
+    def _capture_graph_snapshot(self) -> dict:
+        """Capture current ReCoN graph snapshot for tracing/logging."""
+        try:
+            base = self.hypothesis_manager.graph.get_state_snapshot()
+            # Add lightweight link view for debugging (source, target, type, weight)
+            links = []
+            for link in getattr(self.hypothesis_manager.graph, 'links', []) or []:
+                try:
+                    links.append({
+                        "source": link.source,
+                        "target": link.target,
+                        "type": link.type,
+                        "weight": float(link.weight) if isinstance(link.weight, (int, float)) else (
+                            link.weight.item() if hasattr(link.weight, 'item') else 0.0
+                        )
+                    })
+                except Exception:
+                    pass
+            base["links"] = links
+            return base
+        except Exception:
+            return {}
+
+    def _write_recon_trace(self,
+                           score: Optional[int],
+                           available_names: Optional[List[str]],
+                           step_snapshots: List[dict],
+                           selected_action: Optional[str],
+                           selected_coords: Optional[Tuple[int, int]],
+                           selected_obj_idx: Optional[int]) -> None:
+        """Persist a JSON trace of ReCoN execution for this decision step."""
+        try:
+            level_dir = self._ensure_recon_log_dir(score)
+            timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S%fZ")
+            action_ix = int(self.stats.get('total_actions', 0))
+            fname = f"recon_trace_step_{action_ix:05d}_{timestamp}.json"
+            fpath = os.path.join(level_dir, fname)
+
+            payload = {
+                "meta": {
+                    "game_id": str(getattr(self, 'game_id', 'default')),
+                    "score": int(score) if isinstance(score, int) or (isinstance(score, (np.integer,)) ) else score,
+                    "action_count": int(self.action_count),
+                    "cnn_threshold": float(self.cnn_threshold),
+                    "max_objects": int(self.max_objects),
+                    "available_actions": list(available_names) if available_names else None,
+                    "timestamp_utc": timestamp
+                },
+                "recon_steps": step_snapshots,
+                "outcome": {
+                    "selected_action": selected_action,
+                    "selected_coords": selected_coords,
+                    "selected_object_index": selected_obj_idx
+                }
+            }
+
+            with open(fpath, 'w') as f:
+                json.dump(payload, f, indent=2, default=str)
+        except Exception:
+            # Silent failure to avoid impacting gameplay; debug printing optional
+            if os.getenv('RECON_DEBUG'):
+                print("Failed to write ReCoN trace log")
     
     def _convert_frame_to_tensor(self, frame_data: Any) -> torch.Tensor:
         """Convert frame data to tensor format for neural processing"""
@@ -345,6 +430,7 @@ class ImprovedProductionReCoNArcAngel:
         self.hypothesis_manager.reset()
         
         # Apply availability mask
+        available_names = None
         if hasattr(latest_frame, 'available_actions'):
             available_names = []
             for action in latest_frame.available_actions:
@@ -358,14 +444,19 @@ class ImprovedProductionReCoNArcAngel:
             self.hypothesis_manager.apply_availability_mask(available_names)
         
         # ReCoN propagation with proper por/ret sequences
+        # Capture step-by-step execution trace starting at root request
+        step_snapshots: List[dict] = []
         self.hypothesis_manager.request_frame_change()
+        # Initial snapshot after request
+        step_snapshots.append(self._capture_graph_snapshot())
         
         for _ in range(10):  # Sufficient steps for the improved sequence: action_click -> click_cnn -> click_objects
             self.hypothesis_manager.propagate_step()
+            step_snapshots.append(self._capture_graph_snapshot())
         
         # 🎯 Improved action selection with comprehensive scoring
         best_action, best_coords, best_obj_idx = self.hypothesis_manager.get_best_action_with_improved_scoring(
-            available_actions=available_names if 'available_names' in locals() else None
+            available_actions=available_names if available_names is not None else None
         )
         
         # CRITICAL FIX: Prevent ACTION6 with coords=None (causes "Invalid action" errors)
@@ -449,6 +540,13 @@ class ImprovedProductionReCoNArcAngel:
                 self.hypothesis_manager._save_debug_visualization(
                     current_frame_tensor, best_coords, self.action_count)
         
+        # Persist ReCoN execution trace for this decision
+        try:
+            current_score = latest_frame.score if hasattr(latest_frame, 'score') else None
+        except Exception:
+            current_score = None
+        self._write_recon_trace(current_score, available_names, step_snapshots, best_action, best_coords, best_obj_idx)
+
         # Convert to game action
         try:
             game_action = self._convert_to_game_action(best_action, best_coords)

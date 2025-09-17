@@ -34,6 +34,9 @@ except ImportError:
 
 
 # ReCoN Click Arbiter Functions
+import os
+import json
+from datetime import datetime
 def compute_object_penalties(object_data: List[Dict], pxy: Optional[np.ndarray] = None, 
                            grid_size: int = 64, area_frac_cutoff: float = 0.005, 
                            border_penalty: float = 0.8) -> List[float]:
@@ -120,7 +123,8 @@ def create_recon_click_arbiter(object_data: List[Dict], pxy: Optional[np.ndarray
 
 
 def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float], 
-                               exploration_rate: float = 0.0) -> int:
+                               exploration_rate: float = 0.0,
+                               log_meta: Optional[Dict[str, Any]] = None) -> int:
     """
     Execute ReCoN click arbiter and return selected object index.
     
@@ -128,6 +132,7 @@ def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float],
         graph: ReCoN graph from create_recon_click_arbiter
         object_weights: Object weights from create_recon_click_arbiter
         exploration_rate: Probability of random selection (0.0 = pure ReCoN)
+        log_meta: Optional dict to enable logging with keys like {game_id, score}
     
     Returns:
         Selected object index
@@ -140,8 +145,14 @@ def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float],
         else:
             return 0  # Fallback
     
-    # Execute ReCoN script
+    # Execute ReCoN script with history for logging
+    history = None
     result = graph.execute_script("action_click", max_steps=10)
+    if log_meta is not None:
+        try:
+            history = graph.execute_script_with_history("action_click", max_steps=10)
+        except Exception:
+            history = None
     
     if result == "confirmed":
         # Find which child confirmed by checking final activations
@@ -160,13 +171,66 @@ def execute_recon_click_arbiter(graph: ReCoNGraph, object_weights: List[float],
                         best_activation = scaled_activation
                         best_object = i
         
+        # Optional logging
+        if log_meta is not None:
+            _write_recon_trace_bs(history, object_weights, best_object, log_meta)
         return best_object
     else:
         # Fallback: select object with highest weight
         if object_weights:
-            return max(range(len(object_weights)), key=lambda i: object_weights[i])
+            best_object = max(range(len(object_weights)), key=lambda i: object_weights[i])
+            if log_meta is not None:
+                _write_recon_trace_bs(history, object_weights, best_object, log_meta)
+            return best_object
         else:
+            if log_meta is not None:
+                _write_recon_trace_bs(history, object_weights, 0, log_meta)
             return 0
+
+
+def _ensure_recon_log_dir_bs(game_id: str, score: Optional[int]) -> str:
+    base_dir = "/workspace/recon-platform/recon_log"
+    game_dir = os.path.join(base_dir, f"game_{game_id}")
+    level_dir = os.path.join(game_dir, f"level_{score if score is not None else 'NA'}")
+    try:
+        os.makedirs(level_dir, exist_ok=True)
+    except Exception:
+        pass
+    return level_dir
+
+
+def _write_recon_trace_bs(history: Optional[Dict[str, Any]],
+                          object_weights: List[float],
+                          selected_object_idx: int,
+                          log_meta: Dict[str, Any]) -> None:
+    try:
+        game_id = str(log_meta.get('game_id', 'unknown'))
+        score = log_meta.get('score', None)
+        step_ix = int(log_meta.get('action_count', 0))
+        level_dir = _ensure_recon_log_dir_bs(game_id, score)
+        ts = datetime.utcnow().strftime("%Y%m%dT%H%M%S%fZ")
+        fname = f"bs_recon_trace_step_{step_ix:05d}_{ts}.json"
+        fpath = os.path.join(level_dir, fname)
+
+        payload = {
+            "meta": {
+                "agent": "BlindSquirrelReCoN",
+                "game_id": game_id,
+                "score": score,
+                "action_count": step_ix,
+                "timestamp_utc": ts
+            },
+            "history": history if history is not None else None,
+            "object_weights": object_weights,
+            "outcome": {
+                "selected_object_index": selected_object_idx
+            }
+        }
+
+        with open(fpath, 'w') as f:
+            json.dump(payload, f, indent=2, default=str)
+    except Exception:
+        pass
 
 
 class BlindSquirrelState:
@@ -401,8 +465,14 @@ class BlindSquirrelState:
                 border_penalty=recon_kwargs.get('border_penalty', 0.8)
             )
             
+            # Build log metadata for tracing
+            log_meta = {
+                'game_id': self.game_id,
+                'score': getattr(self, 'score', 0),
+                'action_count': state_graph.recon_click_selections + state_graph.total_click_selections
+            }
             selected_object_idx = execute_recon_click_arbiter(
-                graph, object_weights, recon_exploration_rate
+                graph, object_weights, recon_exploration_rate, log_meta
             )
             
             # Get coordinates for selected object

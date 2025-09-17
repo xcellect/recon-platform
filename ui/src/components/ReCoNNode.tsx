@@ -10,26 +10,26 @@ interface ReCoNNodeData {
 export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
   const getNodeColor = (nodeType: string, state: string): string => {
     const stateColors = {
-      inactive: '#94a3b8',     // slate-400
-      requested: '#0ea5e9',    // sky-500
-      active: '#3b82f6',       // blue-500
-      suppressed: '#71717a',   // zinc-400
-      waiting: '#f59e0b',      // amber-500
-      true: '#10b981',         // emerald-500
-      confirmed: '#16a34a',    // green-600
-      failed: '#dc2626'        // rose-600
+      inactive: '#374151',     // gray-700 - default inactive state
+      requested: '#d97706',    // amber-600 (darker) - node has been requested
+      active: '#2563eb',       // blue-600 (darker) - node is actively processing
+      suppressed: '#4b5563',   // gray-600 - node is suppressed
+      waiting: '#d97706',      // amber-600 (darker) - node is waiting
+      true: '#059669',         // emerald-600 (darker) - node returned true
+      confirmed: '#16a34a',    // green-600 - node is confirmed
+      failed: '#dc2626'        // red-600 (darker) - node failed
     };
 
-    return stateColors[state as keyof typeof stateColors] || '#f5f5f5';
+    return stateColors[state as keyof typeof stateColors] || '#374151';
   };
 
   const getBorderColor = (nodeType: string): string => {
     const colors = {
-      script: '#1976d2',
-      terminal: '#388e3c',
-      hybrid: '#7b1fa2'
+      script: '#dc2626',       // red-600
+      terminal: '#991b1b',     // red-800
+      hybrid: '#ef4444'        // red-500
     };
-    return colors[nodeType as keyof typeof colors] || '#666';
+    return colors[nodeType as keyof typeof colors] || '#6b7280';
   };
 
   return (
@@ -42,9 +42,10 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         minWidth: '100px',
         textAlign: 'center',
         fontSize: '12px',
-        fontWeight: 'bold',
-        color: '#333',
-        position: 'relative'
+        fontWeight: '500',
+        color: '#ffffff',
+        position: 'relative',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
       }}
     >
       {/* Top handle for sub/sur (hierarchical) connections */}
@@ -53,7 +54,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Top}
         id="top"
         style={{
-          background: '#1976d2',
+          background: '#dc2626',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -64,7 +65,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Top}
         id="top-source"
         style={{
-          background: '#1976d2',
+          background: '#dc2626',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -77,7 +78,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Left}
         id="left"
         style={{
-          background: '#f57c00',
+          background: '#6b7280',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -88,7 +89,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Left}
         id="left-source"
         style={{
-          background: '#f57c00',
+          background: '#6b7280',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -101,7 +102,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Right}
         id="right"
         style={{
-          background: '#f57c00',
+          background: '#6b7280',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -112,7 +113,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Right}
         id="right-source"
         style={{
-          background: '#f57c00',
+          background: '#6b7280',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -125,7 +126,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Bottom}
         id="bottom"
         style={{
-          background: '#1976d2',
+          background: '#dc2626',
           width: '8px',
           height: '8px',
           borderRadius: '50%'
@@ -136,7 +137,7 @@ export default function ReCoNNode({ data }: NodeProps<ReCoNNodeData>) {
         position={Position.Bottom}
         id="bottom-source"
         style={{
-          background: '#1976d2',
+          background: '#dc2626',
           width: '8px',
           height: '8px',
           borderRadius: '50%'

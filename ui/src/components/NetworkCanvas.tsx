@@ -31,15 +31,15 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style, data }: any
 
     switch (linkType) {
       case 'sub':
-        return { ...baseStyle, stroke: '#1976d2', strokeWidth: 3 };
+        return { ...baseStyle, stroke: '#dc2626', strokeWidth: 2 };
       case 'sur':
-        return { ...baseStyle, stroke: '#1976d2', strokeDasharray: '5,5' };
+        return { ...baseStyle, stroke: '#dc2626', strokeDasharray: '5,5', strokeWidth: 2 };
       case 'por':
-        return { ...baseStyle, stroke: '#388e3c', strokeWidth: 3 };
+        return { ...baseStyle, stroke: '#dc2626', strokeWidth: 2 };
       case 'ret':
-        return { ...baseStyle, stroke: '#388e3c', strokeDasharray: '5,5' };
+        return { ...baseStyle, stroke: '#dc2626', strokeDasharray: '5,5', strokeWidth: 2 };
       case 'gen':
-        return { ...baseStyle, stroke: '#f57c00', strokeDasharray: '2,2' };
+        return { ...baseStyle, stroke: '#ef4444', strokeDasharray: '2,2', strokeWidth: 2 };
       default:
         return baseStyle;
     }
@@ -53,11 +53,29 @@ const CustomEdge = ({ id, sourceX, sourceY, targetX, targetY, style, data }: any
         className="react-flow__edge-path"
         d={edgePath}
       />
-      {/* Link type label */}
-      <text>
-        <textPath href={`#${id}`} style={{ fontSize: '12px', fill: '#666' }} startOffset="50%" textAnchor="middle">
-          {data?.linkType || ''}
-        </textPath>
+      {/* Link type label with background rect */}
+      <rect 
+        x={sourceX + (targetX - sourceX) / 2 - 15}
+        y={sourceY + (targetY - sourceY) / 2 - 8}
+        width="30"
+        height="16"
+        rx="4"
+        fill="#1f2937"
+        stroke="#374151"
+        strokeWidth="1"
+      />
+      <text
+        x={sourceX + (targetX - sourceX) / 2}
+        y={sourceY + (targetY - sourceY) / 2 + 3}
+        textAnchor="middle"
+        style={{ 
+          fontSize: '10px', 
+          fill: '#e5e7eb',
+          fontWeight: '500',
+          fontFamily: 'system-ui, -apple-system, sans-serif'
+        }}
+      >
+        {data?.linkType || ''}
       </text>
     </g>
   );
@@ -247,7 +265,7 @@ export default function NetworkCanvas({ onNodeSelect, onEdgeSelect }: NetworkCan
   }, [addNode]);
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full bg-gray-900">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -269,14 +287,15 @@ export default function NetworkCanvas({ onNodeSelect, onEdgeSelect }: NetworkCan
         <MiniMap
           nodeColor={(node) => {
             switch (node.type) {
-              case 'script': return '#e3f2fd';
-              case 'terminal': return '#e8f5e8';
-              case 'hybrid': return '#f3e5f5';
-              default: return '#f5f5f5';
+              case 'script': return '#dc2626';
+              case 'terminal': return '#991b1b';
+              case 'hybrid': return '#ef4444';
+              default: return '#374151';
             }
           }}
+          maskColor="rgba(0, 0, 0, 0.6)"
         />
-        <Background variant="dots" gap={12} size={1} />
+        <Background variant="dots" gap={12} size={1} color="#6b7280" />
       </ReactFlow>
     </div>
   );

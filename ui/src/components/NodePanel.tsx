@@ -4,7 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useNetworkStore } from '../stores/networkStore';
 import { ReCoNNodeType, ExecutionMode } from '../types/recon';
 
-export default function NodePanel() {
+interface NodePanelProps {
+  executionHistory?: any[];
+  currentStep?: number;
+}
+
+export default function NodePanel({ executionHistory = [], currentStep = 0 }: NodePanelProps) {
   const {
     selectedNode,
     selectedLink,
@@ -118,25 +123,41 @@ export default function NodePanel() {
     }
   };
 
-  if (!selectedNode && !selectedLink) {
-    return (
-      <div className="bg-gray-100 p-4 rounded-lg">
-        <div className="text-gray-500 text-center">
-          Select a node or link to view properties
-        </div>
-      </div>
-    );
-  }
+  // Get current step data for messages
+  const currentStepData = executionHistory[currentStep];
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+    <div className="space-y-4">
+      {/* Current Messages Display */}
+      {currentStepData?.messages && currentStepData.messages.length > 0 && (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-white mb-3">Current Messages</h3>
+          <div className="space-y-1">
+            {currentStepData.messages.map((msg: any, index: number) => (
+              <div key={index} className="text-xs bg-gray-700 p-2 rounded text-gray-300">
+                <span className="font-medium">{msg.type}</span>: {msg.from} → {msg.to} ({msg.link})
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Node/Link Properties */}
+      {(!selectedNode && !selectedLink) ? (
+        <div className="bg-gray-800 p-4 rounded-lg">
+          <div className="text-gray-400 text-center">
+            Select a node or link to view properties
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
       {selectedNode && (
         <>
-          <h3 className="text-lg font-semibold text-gray-800">Node Properties</h3>
+          <h3 className="text-lg font-semibold text-white">Node Properties</h3>
 
           {/* Node ID */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Node ID
             </label>
             <input
@@ -147,13 +168,13 @@ export default function NodePanel() {
                 setIsEditing(true);
                 setNodeId(e.target.value);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
             />
           </div>
 
           {/* Node Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Node Type
             </label>
             <select
@@ -163,7 +184,7 @@ export default function NodePanel() {
                 setIsEditing(true);
                 setNodeType(e.target.value as ReCoNNodeType);
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
             >
               <option value="script">Script Node</option>
               <option value="terminal">Terminal Node</option>
@@ -174,7 +195,7 @@ export default function NodePanel() {
           {/* Execution Mode (for hybrid nodes) */}
           {(nodeType === 'hybrid' || selectedNode.type === 'hybrid') && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Execution Mode
               </label>
               <select
@@ -183,7 +204,7 @@ export default function NodePanel() {
                   setIsEditing(true);
                   setExecutionMode(e.target.value as ExecutionMode);
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
               >
                 <option value="explicit">Explicit (Symbolic)</option>
                 <option value="neural">Neural (PyTorch)</option>
@@ -194,17 +215,17 @@ export default function NodePanel() {
 
           {/* Current State (read-only) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Current State
             </label>
-            <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+            <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300">
               {selectedNode.state.charAt(0).toUpperCase() + selectedNode.state.slice(1)}
             </div>
           </div>
 
           {/* Activation Level */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               Activation Level
             </label>
             <input
@@ -216,17 +237,17 @@ export default function NodePanel() {
                 setNodeActivation(e.target.value);
               }}
               step="0.001"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white font-mono"
             />
           </div>
 
           {/* Terminal Node Configuration */}
           {nodeType === 'terminal' && (
-            <div className="space-y-3 pt-4 border-t border-gray-200">
-              <h4 className="text-md font-medium text-gray-800">Terminal Configuration</h4>
+            <div className="space-y-3 pt-4 border-t border-gray-600">
+              <h4 className="text-md font-medium text-white">Terminal Configuration</h4>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Measurement Value (0.0 - 1.0)
                 </label>
                 <input
@@ -239,11 +260,11 @@ export default function NodePanel() {
                   step="0.1"
                   min="0"
                   max="1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
                 />
               </div>
 
-              <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+              <div className="text-sm text-gray-300 bg-gray-700 p-3 rounded">
                 <strong>Behavior:</strong> {parseFloat(measurementValue) > 0.8 ? '✅ Will CONFIRM' : '❌ Will FAIL'}
                 <div className="text-xs mt-1">
                   Threshold: 0.8 (measurement &gt; 0.8 confirms, &lt; 0.8 fails)
@@ -254,14 +275,14 @@ export default function NodePanel() {
 
           {/* Neural Configuration */}
           {executionMode === 'neural' && (
-            <div className="space-y-3 pt-4 border-t border-gray-200">
-              <h4 className="text-md font-medium text-gray-800">Neural Configuration</h4>
+            <div className="space-y-3 pt-4 border-t border-gray-600">
+              <h4 className="text-md font-medium text-white">Neural Configuration</h4>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Model Type
                 </label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white">
                   <option value="linear">Linear Model</option>
                   <option value="mlp">Multi-Layer Perceptron</option>
                   <option value="cnn">Convolutional Neural Network</option>
@@ -270,29 +291,29 @@ export default function NodePanel() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Input Dimensions
                 </label>
                 <input
                   type="text"
                   placeholder="e.g., [8, 8] for ARC grids"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white placeholder-gray-400"
                 />
               </div>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2 pt-4 border-t border-gray-200">
+          <div className="flex gap-2 pt-4 border-t border-gray-600">
             <button
               onClick={handleUpdateNode}
-              className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
             >
-              Update Node
+              Update
             </button>
             <button
               onClick={handleDeleteNode}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+              className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
             >
               Delete
             </button>
@@ -302,23 +323,23 @@ export default function NodePanel() {
 
       {selectedLink && (
         <>
-          <h3 className="text-lg font-semibold text-gray-800">Link Properties</h3>
+          <h3 className="text-lg font-semibold text-white">Link Properties</h3>
 
           {/* Link Info */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Source
               </label>
-              <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+              <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300">
                 {selectedLink.source}
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 Target
               </label>
-              <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+              <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300">
                 {selectedLink.target}
               </div>
             </div>
@@ -328,11 +349,11 @@ export default function NodePanel() {
           {(selectedLink.type === 'sub/sur' || selectedLink.type === 'por/ret') && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Link Pair Type
                 </label>
-                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
-                  {selectedLink.type} - Bidirectional {selectedLink.type === 'sub/sur' ? 'hierarchy' : 'sequence'}
+                <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300">
+                  {selectedLink.type} - bidirectional {selectedLink.type === 'sub/sur' ? 'hierarchy' : 'sequence'}
                 </div>
               </div>
 
@@ -340,8 +361,8 @@ export default function NodePanel() {
               {selectedLink.type === 'sub/sur' && (selectedLink as any)._subLink && (selectedLink as any)._surLink && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      SUB Weight ({selectedLink.source} → {selectedLink.target})
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Weight ({selectedLink.source} → {selectedLink.target})
                     </label>
                     <input
                       type="number"
@@ -352,12 +373,12 @@ export default function NodePanel() {
                         setSubWeight(value);
                       }}
                       step="0.1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      SUR Weight ({selectedLink.target} → {selectedLink.source})
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Weight ({selectedLink.target} → {selectedLink.source})
                     </label>
                     <input
                       type="number"
@@ -368,7 +389,7 @@ export default function NodePanel() {
                         setSurWeight(value);
                       }}
                       step="0.1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
                     />
                   </div>
                 </div>
@@ -377,8 +398,8 @@ export default function NodePanel() {
               {selectedLink.type === 'por/ret' && (selectedLink as any)._porLink && (selectedLink as any)._retLink && (
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      POR Weight ({selectedLink.source} → {selectedLink.target})
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Weight ({selectedLink.source} → {selectedLink.target})
                     </label>
                     <input
                       type="number"
@@ -389,12 +410,12 @@ export default function NodePanel() {
                         setPorWeight(value);
                       }}
                       step="0.1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      RET Weight ({selectedLink.target} → {selectedLink.source})
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
+                      Weight ({selectedLink.target} → {selectedLink.source})
                     </label>
                     <input
                       type="number"
@@ -405,14 +426,14 @@ export default function NodePanel() {
                         setRetWeight(value);
                       }}
                       step="0.1"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
                     />
                   </div>
                 </div>
               )}
 
               {/* Update button for combined links */}
-              <div className="pt-4 border-t border-gray-200">
+              <div className="pt-4 border-t border-gray-600">
                 <button
                   onClick={() => {
                     if (selectedLink.type === 'sub/sur') {
@@ -429,9 +450,9 @@ export default function NodePanel() {
                       console.log('Updated por/ret weights:', { por: porWeight, ret: retWeight });
                     }
                   }}
-                  className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                 >
-                  Update Weights
+                  Update
                 </button>
               </div>
             </div>
@@ -441,16 +462,16 @@ export default function NodePanel() {
           {selectedLink.type !== 'sub/sur' && selectedLink.type !== 'por/ret' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Link Type
                 </label>
-                <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-700">
+                <div className="px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-gray-300">
                   {selectedLink.type} - {getLinkDescription(selectedLink.type)}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Weight
                 </label>
               <input
@@ -462,30 +483,32 @@ export default function NodePanel() {
                   setLinkWeight(value);
                 }}
                 step="0.1"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 bg-gray-700 text-white"
               />
               </div>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex gap-2 pt-4 border-t border-gray-200">
+          <div className="flex gap-2 pt-4 border-t border-gray-600">
             {selectedLink.type !== 'sub/sur' && selectedLink.type !== 'por/ret' && (
               <button
                 onClick={handleUpdateLink}
-                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
               >
-                Update Link
+                Update
               </button>
             )}
             <button
               onClick={handleDeleteLink}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
+              className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
             >
-              Delete {selectedLink.type === 'sub/sur' || selectedLink.type === 'por/ret' ? 'Pair' : 'Link'}
+              Delete
             </button>
           </div>
         </>
+      )}
+        </div>
       )}
     </div>
   );

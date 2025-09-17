@@ -21,3 +21,110 @@ body {
   height: 100vh;
   width: 100%;
 }
+
+/* ReactFlow dark theme overrides */
+.react-flow {
+  background: #111827 !important;
+}
+
+.react-flow__pane {
+  background: #111827 !important;
+}
+
+.react-flow__controls {
+  background: rgba(55, 65, 81, 0.8) !important;
+  border: 1px solid #374151 !important;
+}
+
+.react-flow__controls button {
+  background: #374151 !important;
+  color: #e5e7eb !important;
+  border-bottom: 1px solid #4b5563 !important;
+}
+
+.react-flow__controls button:hover {
+  background: #4b5563 !important;
+}
+
+.react-flow__minimap {
+  background: rgba(55, 65, 81, 0.8) !important;
+  border: 1px solid #374151 !important;
+}
+
+/* Hide ReactFlow watermark/attribution */
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__panel.react-flow__attribution {
+  display: none !important;
+}
+
+a[href*="reactflow.dev"] {
+  display: none !important;
+}
+
+/* ReactFlow controls tooltips - target the actual tooltip elements */
+.react-flow__controls .react-flow__controls-button {
+  background: #374151 !important;
+  color: #e5e7eb !important;
+  border-bottom: 1px solid #4b5563 !important;
+}
+
+.react-flow__controls .react-flow__controls-button:hover {
+  background: #4b5563 !important;
+}
+
+/* Override default ReactFlow tooltip styling */
+.react-flow .react-flow__controls button {
+  background: #374151 !important;
+  color: #e5e7eb !important;
+  border-bottom: 1px solid #4b5563 !important;
+}
+
+.react-flow .react-flow__controls button:hover {
+  background: #4b5563 !important;
+}
+
+/* Target any tooltip that might appear */
+div[role="tooltip"] {
+  background: #1f2937 !important;
+  color: #e5e7eb !important;
+  border: 1px solid #374151 !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Also target any data-tooltip attributes */
+[data-tooltip]:hover::after {
+  background: #1f2937 !important;
+  color: #e5e7eb !important;
+  border: 1px solid #374151 !important;
+}
+
+/* ReactFlow edge labels */
+.react-flow__edge-text {
+  fill: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+.react-flow__edge-textbg {
+  fill: #1f2937 !important;
+  stroke: #374151 !important;
+  stroke-width: 1 !important;
+  rx: 4 !important;
+  ry: 4 !important;
+}
+
+/* Edge label containers */
+.react-flow__edge .react-flow__edge-text {
+  fill: #ffffff !important;
+}
+
+/* Additional edge text styling */
+.react-flow__edge text {
+  fill: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+}

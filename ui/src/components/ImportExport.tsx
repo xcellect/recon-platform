@@ -200,8 +200,8 @@ export default function ImportExport() {
 
   if (!currentNetwork) {
     return (
-      <div className="bg-gray-100 p-4 rounded-lg">
-        <div className="text-gray-500 text-center">
+      <div className="bg-gray-800 p-4 rounded-lg">
+        <div className="text-gray-400 text-center">
           No network loaded
         </div>
       </div>
@@ -209,43 +209,43 @@ export default function ImportExport() {
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
-      <h3 className="text-lg font-semibold text-gray-800">Import/Export</h3>
+    <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-4">
+      <h3 className="text-lg font-semibold text-white">Import/Export</h3>
 
       {/* Export Section */}
       <div className="space-y-3">
-        <h4 className="text-md font-medium text-gray-700">Export Network</h4>
+        <h4 className="text-md font-medium text-white">Export Network</h4>
 
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={handleExport}
             disabled={isExporting}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm"
           >
-            {isExporting ? 'Exporting...' : 'Export JSON'}
+            {isExporting ? 'Exporting...' : 'JSON'}
           </button>
 
           <button
             onClick={handleExportReactFlow}
             disabled={isExporting}
-            className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm"
           >
-            Export React Flow
+            React Flow
           </button>
 
           <button
             onClick={handleExportCytoscape}
             disabled={isExporting}
-            className="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm"
           >
-            Export Cytoscape
+            Cytoscape
           </button>
 
           <button
             onClick={handleShareNetwork}
-            className="px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm"
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 text-sm"
           >
-            Copy to Clipboard
+            Clipboard
           </button>
         </div>
 
@@ -253,14 +253,14 @@ export default function ImportExport() {
       </div>
 
       {/* Import Section */}
-      <div className="space-y-3 pt-4 border-t border-gray-200">
-        <h4 className="text-md font-medium text-gray-700">Import Network</h4>
+      <div className="space-y-3 pt-4 border-t border-gray-600">
+        <h4 className="text-md font-medium text-white">Import Network</h4>
 
         <div className="flex gap-3">
           <button
             onClick={handleImportClick}
             disabled={isImporting}
-            className="px-4 py-2 bg-gray-500 text-white rounded-md hover:bg-gray-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+            className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 disabled:bg-gray-500 disabled:cursor-not-allowed text-sm"
           >
             {isImporting ? 'Importing...' : 'Import from File'}
           </button>
@@ -274,15 +274,15 @@ export default function ImportExport() {
           />
         </div>
 
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-400">
           Supported formats: JSON exported from ReCoN Platform
         </div>
       </div>
 
       {/* Network Info */}
-      <div className="pt-4 border-t border-gray-200">
-        <h4 className="text-md font-medium text-gray-700 mb-2">Current Network</h4>
-        <div className="text-sm text-gray-600 space-y-1">
+      <div className="pt-4 border-t border-gray-600">
+        <h4 className="text-md font-medium text-white mb-2">Current Network</h4>
+        <div className="text-sm text-gray-300 space-y-1">
           <div>ID: <span className="font-mono">{currentNetwork.id}</span></div>
           <div>Nodes: <span className="font-medium">{currentNetwork.nodes.length}</span></div>
           <div>Links: <span className="font-medium">{currentNetwork.links.length}</span></div>

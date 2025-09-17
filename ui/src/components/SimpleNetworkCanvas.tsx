@@ -95,9 +95,9 @@ export default function SimpleNetworkCanvas({
           targetHandle: 'top',
           label: 'sub/sur',
           type: 'smoothstep',
-          style: { stroke: '#1976d2', strokeWidth: 2 },
-          markerStart: { type: 'arrowclosed', color: '#1976d2' },
-          markerEnd: { type: 'arrowclosed', color: '#1976d2' },
+          style: { stroke: '#dc2626', strokeWidth: 2 },
+          markerStart: { type: 'arrowclosed', color: '#dc2626' },
+          markerEnd: { type: 'arrowclosed', color: '#dc2626' },
         } as Edge);
       }
 
@@ -113,9 +113,9 @@ export default function SimpleNetworkCanvas({
           targetHandle: 'left',
           label: 'por/ret',
           type: 'smoothstep',
-          style: { stroke: '#f57c00', strokeWidth: 2, strokeDasharray: '5,5' },
-          markerStart: { type: 'arrowclosed', color: '#f57c00' },
-          markerEnd: { type: 'arrowclosed', color: '#f57c00' },
+          style: { stroke: '#dc2626', strokeWidth: 2, strokeDasharray: '5,5' },
+          markerStart: { type: 'arrowclosed', color: '#dc2626' },
+          markerEnd: { type: 'arrowclosed', color: '#dc2626' },
         } as Edge);
       }
     });
@@ -129,8 +129,8 @@ export default function SimpleNetworkCanvas({
         target: link.target,
         label: 'gen',
         type: 'smoothstep',
-        style: { stroke: '#9e9e9e', strokeWidth: 2, strokeDasharray: '2,2' },
-        markerEnd: { type: 'arrowclosed', color: '#9e9e9e' },
+        style: { stroke: '#ef4444', strokeWidth: 2, strokeDasharray: '2,2' },
+        markerEnd: { type: 'arrowclosed', color: '#ef4444' },
       } as Edge);
     });
 
@@ -231,7 +231,7 @@ export default function SimpleNetworkCanvas({
   }, [updateNode]);
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full bg-gray-900">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -275,11 +275,12 @@ export default function SimpleNetworkCanvas({
       >
         <Controls />
         <MiniMap
-          nodeColor={() => '#f0f0f0'}
-          nodeStrokeColor={() => '#333'}
+          nodeColor={() => '#dc2626'}
+          nodeStrokeColor={() => '#991b1b'}
           nodeStrokeWidth={2}
+          maskColor="rgba(0, 0, 0, 0.6)"
         />
-        <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+        <Background variant={BackgroundVariant.Dots} gap={12} size={1} color="#6b7280" />
       </ReactFlow>
     </div>
   );

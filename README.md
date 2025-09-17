@@ -18,30 +18,18 @@ Request Confirmation Networks for neuro‑symbolic script execution — a faithf
 - Video walkthrough: [![ReCoN Platform Demo](https://img.youtube.com/vi/S_MzzxUEFcQ/maxresdefault.jpg)](https://youtu.be/S_MzzxUEFcQ?si=lJVZrC9SaRp405EQ)
 - Short GIF: ![ReCoN Demo](docs/assets/recon-demo.gif) (TBD)
 
-Quick CLI demo (exports data for the UI):
 
-```bash
-python demo_agent_mapping.py
-# writes demo_export.json with React Flow exports and metrics
-```
+## Features
 
-Validate ARCON ReCoN integration:
-
-```bash
-python recon_agents/arcon/validate_recon_integration.py
-```
-
-## Alignment with CIMC Option 5
-
-1) Working implementation + dynamic visualization — Completed
-- Core engine implements all paper semantics; 63 tests pass
+1) Working implementation + dynamic visualization
+- Core engine implements all paper semantics; 132 tests pass (including hypothesis tests to catch randomized edge cases)
 - UI provides live execution, state coloring, import/export, and auto‑layout
 
-2) Demonstrate ReCoN solving a representation problem — Completed
+2) Demonstrate ReCoN solving a representation problem
 - ARCON reframes “which object to click” as a ReCoN hypothesis: perceive → select → verify; with `exploration_rate=0`, decisions come from the ReCoN script
 - ReCoN ARC Angel uses a CNN terminal to drive `sub/sur` link weights in a hierarchical hypothesis (with `por/ret` sequencing for ACTION6), yielding mask‑aware coordinate selection and background suppression
 
-3) Bonus components — Completed
+3) Bonus components
 - Hybrid nodes (explicit/implicit/neural), PyTorch neural terminals, continuous message protocol, multi‑format exporters, ARC mappings, production UI
 
 ## Why ReCoN

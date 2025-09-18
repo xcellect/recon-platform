@@ -9,6 +9,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List, Optional
 import uuid
+import os
+import json
+from pathlib import Path
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 
@@ -459,6 +462,58 @@ async def import_network(data: dict, network_id: Optional[str] = None):
         return {"network_id": final_network_id, "message": "Network imported successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+
+# Parsed Networks endpoints - serve static parsed network files
+@app.get("/parsed-networks")
+async def list_parsed_networks():
+    """List available parsed networks from static files."""
+    parsed_networks_dir = Path("ui/parsed_networks")
+    
+    if not parsed_networks_dir.exists():
+        return []
+    
+    networks = []
+    for json_file in parsed_networks_dir.glob("*.json"):
+        network_id = json_file.stem
+        networks.append({
+            "id": network_id,
+            "name": network_id.replace("_", " ").title(),
+            "filename": json_file.name
+        })
+    
+    return networks
+
+
+@app.get("/parsed-networks/{network_id}")
+async def get_parsed_network(network_id: str):
+    """Get a specific parsed network."""
+    parsed_networks_dir = Path("ui/parsed_networks")
+    network_file = parsed_networks_dir / f"{network_id}.json"
+    
+    if not network_file.exists():
+        raise HTTPException(status_code=404, detail=f"Parsed network {network_id} not found")
+    
+    try:
+        with open(network_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load network: {str(e)}")
+
+
+@app.get("/parsed-networks/{network_id}/execution-history")
+async def get_parsed_network_execution_history(network_id: str):
+    """Get execution history for a parsed network (placeholder)."""
+    # For now, return empty history since these are static files
+    # In the future, this could load actual execution logs
+    return {
+        "network_id": network_id,
+        "root_node": "unknown",
+        "result": "unknown",
+        "steps": [],
+        "final_state": {},
+        "total_steps": 0
+    }
 
 
 if __name__ == "__main__":

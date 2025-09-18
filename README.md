@@ -14,10 +14,13 @@ Request Confirmation Networks for neuro‑symbolic script execution — a faithf
 
 ## Demo
 
+**🚀 Live Web Demo:**
+[https://melodic-chaja-8295bd.netlify.app/](https://melodic-chaja-8295bd.netlify.app/)
+
 **Video Walkthrough:**
 [![ReCoN Platform Demo](https://img.youtube.com/vi/S_MzzxUEFcQ/maxresdefault.jpg)](https://youtu.be/S_MzzxUEFcQ?si=lJVZrC9SaRp405EQ)
 
-**Live Demo:**
+**Solving ARC on ReCoN:**
 <div align="center">
   <img src="demo/demo_recon.gif" alt="ReCoN Platform Demo" width="800"/>
   <br>

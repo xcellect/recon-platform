@@ -84,7 +84,12 @@ app = FastAPI(
 # Enable CORS for frontend integration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "http://localhost:8888",  # Local development
+        "http://localhost:3000",  # Alternative local dev
+        "https://melodic-chaja-8295bd.netlify.app",  # Netlify production
+        "*"  # Fallback for other origins
+    ],
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"],

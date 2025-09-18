@@ -1,6 +1,6 @@
 // API client for ReCoN Platform backend
 
-const API_BASE_URL = 'https://ofgbdwa1jmizgy-5001.proxy.runpod.net/';
+const API_BASE_URL = 'https://ofgbdwa1jmizgy-5001.proxy.runpod.net';
 
 export interface NodeCreateRequest {
   node_id: string;

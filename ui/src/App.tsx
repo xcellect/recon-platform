@@ -6,6 +6,7 @@ import NodePanel from './components/NodePanel';
 import ImportExport from './components/ImportExport';
 import ARCScorecardTest from './components/ARCScorecardTest';
 import { useNetworkStore } from './stores/networkStore';
+import logoIcon from '../assets/icon.svg';
 
 type TabType = 'recon' | 'scorecard';
 
@@ -167,7 +168,7 @@ function App() {
           {/* Right: Logo */}
           <div className="flex items-center px-6">
             <img 
-              src="/assets/icon.svg" 
+              src={logoIcon} 
               alt="ReCon Logo" 
               className="h-6"
             />

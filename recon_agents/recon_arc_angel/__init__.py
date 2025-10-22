@@ -13,10 +13,14 @@ Key components:
 from .learning_manager import LearningManager
 from .improved_hierarchy_manager import ImprovedHierarchicalHypothesisManager
 from .improved_production_agent import ImprovedProductionReCoNArcAngel
+from .link_weight_learner import LinkWeightLearner  # EXTENSION 1B
+from .global_workspace import GlobalWorkspace      # EXTENSION 3B
 
 # Export production-ready agent and components that still exist
 __all__ = [
-    'ImprovedProductionReCoNArcAngel', 
-    'ImprovedHierarchicalHypothesisManager', 
-    'LearningManager', 
+    'ImprovedProductionReCoNArcAngel',
+    'ImprovedHierarchicalHypothesisManager',
+    'LearningManager',
+    'LinkWeightLearner',   # EXTENSION 1B
+    'GlobalWorkspace',     # EXTENSION 3B
 ]

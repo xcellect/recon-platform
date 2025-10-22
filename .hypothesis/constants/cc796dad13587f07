@@ -1,0 +1,4 @@
+# file: /workspace/repo-update/recon-platform/recon_agents/base_agent.py
+# hypothesis_version: 6.140.2
+
+['actions_tried', 'activation', 'agent_id', 'current_state', 'default', 'frame_data', 'from', 'future_states', 'game_id', 'graph', 'graph_links', 'graph_nodes', 'metadata', 'script', 'state', 'state_history_length', 'step', 'step_count', 'to', 'total_steps', 'value', 'visits']

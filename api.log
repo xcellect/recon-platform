@@ -1,0 +1,16 @@
+nohup: ignoring input
+INFO:     Started server process [4528]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:5001 (Press CTRL+C to quit)
+ReCon ARC Demo API starting up...
+Created demo network with ID: demo
+INFO:     100.64.0.26:51134 - "GET / HTTP/1.1" 200 OK
+INFO:     100.64.0.37:49370 - "GET / HTTP/1.1" 200 OK
+INFO:     100.64.0.35:60948 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:49926 - "GET / HTTP/1.1" 200 OK
+INFO:     100.64.0.34:52264 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.34:52264 - "GET /parsed-networks HTTP/1.1" 200 OK
+INFO:     100.64.0.34:52264 - "GET /parsed-networks/recon_arc_angel_vc33 HTTP/1.1" 200 OK
+INFO:     100.64.0.34:52278 - "GET /parsed-networks HTTP/1.1" 200 OK
+INFO:     100.64.0.34:52264 - "GET /parsed-networks/recon_arc_angel_vc33/execution-history HTTP/1.1" 200 OK

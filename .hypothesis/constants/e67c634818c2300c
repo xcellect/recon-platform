@@ -1,0 +1,4 @@
+# file: /workspace/repo-update/recon-platform/recon_agents/recon_arc_angel/learning_manager.py
+# hypothesis_version: 6.140.2
+
+[0.0, 1e-05, 0.0001, 0.5, 1.0, 200000, '_', 'accuracy', 'action', 'action_1', 'action_2', 'action_3', 'action_4', 'action_5', 'action_click', 'action_count', 'action_entropy', 'action_idx', 'batch_size', 'buffer_resets', 'buffer_size', 'buffer_utilization', 'cnn_cache_size', 'coord_entropy', 'cuda', 'current_score', 'default', 'frame', 'last_loss', 'main_loss', 'mean_reward', 'positive_rewards', 'reward', 'score', 'should_train', 'state', 'to', 'total_experiences', 'total_loss', 'total_training_steps', 'unique_experiences', 'utf-8', 'value']

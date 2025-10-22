@@ -5,6 +5,12 @@ REST API for creating and executing ReCoN networks.
 Foundation for Phase 3 implementation.
 """
 
+import sys
+from pathlib import Path
+
+# Add parent directory to Python path to find recon_engine
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, List, Optional

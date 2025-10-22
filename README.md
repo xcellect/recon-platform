@@ -2,7 +2,26 @@
 
 Request Confirmation Networks for neuro‑symbolic script execution — a faithful, production‑grade implementation of Bach & Herger (2015) with a modern visualization UI and live ARC‑AGI agent demos.
 
-• Paper: “Request Confirmation Networks for Neuro‑Symbolic Script Execution” (Bach & Herger, 2015)
+• Paper: "Request Confirmation Networks for Neuro‑Symbolic Script Execution" (Bach & Herger, 2015)
+
+---
+
+## ⚠️ Under Construction
+
+**Portability Notice:** This codebase currently contains path-related dependencies that limit portability across different environments. These issues are being actively addressed and include:
+
+- Hardcoded absolute paths (e.g., `/workspace/recon-platform`) in agents and tests
+- Working directory assumptions for relative paths in the API
+- Linux-specific path conventions that may not work on macOS/Windows without POSIX shell/WSL
+
+For detailed information about these limitations, see the [Code Caveats](#code-caveats) section below. We recommend running this code in a Linux environment with the expected directory structure until these portability improvements are complete.
+
+**Current workarounds:**
+- Run from the repository root directory
+- Ensure `/workspace/recon-platform` or `/workspace/repo-update/recon-platform` structure or update hardcoded paths
+- Use Docker containers with appropriate bind mounts and permissions
+
+---
 
 ## TL;DR
 

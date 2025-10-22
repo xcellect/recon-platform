@@ -185,12 +185,12 @@ export default function TraceViewer() {
   };
 
   return (
-    <div className="h-full w-full flex flex-col bg-gray-50" onKeyDown={handleKeyPress} tabIndex={0}>
+    <div className="h-full w-full flex flex-col bg-gray-900" onKeyDown={handleKeyPress} tabIndex={0}>
       {/* Header Controls */}
-      <div className="bg-white border-b border-gray-200 p-4 shadow-sm">
+      <div className="bg-gray-900 border-b border-gray-700 p-4 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Game:</label>
+            <label className="text-sm font-medium text-gray-300">Game:</label>
             <select
               value={selectedGame}
               onChange={(e) => {
@@ -200,7 +200,7 @@ export default function TraceViewer() {
                   setSelectedLevel(game.levels[0]);
                 }
               }}
-              className="px-3 py-1 border border-gray-300 rounded text-sm"
+              className="px-3 py-1 border border-gray-600 rounded text-sm bg-gray-800 text-white"
             >
               {index?.games.map(game => (
                 <option key={game.game_id} value={game.game_id}>
@@ -211,11 +211,11 @@ export default function TraceViewer() {
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Level:</label>
+            <label className="text-sm font-medium text-gray-300">Level:</label>
             <select
               value={selectedLevel}
               onChange={(e) => setSelectedLevel(e.target.value)}
-              className="px-3 py-1 border border-gray-300 rounded text-sm"
+              className="px-3 py-1 border border-gray-600 rounded text-sm bg-gray-800 text-white"
             >
               {availableLevels.map(level => (
                 <option key={level} value={level}>
@@ -228,15 +228,15 @@ export default function TraceViewer() {
           {currentStepData && (
             <>
               <div className="ml-auto flex items-center gap-3 text-sm">
-                <span className="text-gray-600">
-                  Score: <span className="font-bold text-blue-600">{currentStepData.meta.score}</span>
+                <span className="text-gray-300">
+                  Score: <span className="font-bold text-cyan-400">{currentStepData.meta.score}</span>
                 </span>
-                <span className="text-gray-600">
-                  Action: <span className="font-mono text-purple-600">{currentStepData.outcome.action || 'none'}</span>
+                <span className="text-gray-300">
+                  Action: <span className="font-mono text-purple-400">{currentStepData.outcome.action || 'none'}</span>
                 </span>
                 {currentStepData.outcome.coords && (
-                  <span className="text-gray-600">
-                    Click: <span className="font-mono text-red-600">
+                  <span className="text-gray-300">
+                    Click: <span className="font-mono text-red-400">
                       ({currentStepData.outcome.coords[0]}, {currentStepData.outcome.coords[1]})
                     </span>
                   </span>
@@ -251,22 +251,22 @@ export default function TraceViewer() {
       <div className="flex-1 flex overflow-hidden">
         {loading && (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-gray-500">Loading trace data...</div>
+            <div className="text-gray-400">Loading trace data...</div>
           </div>
         )}
 
         {error && (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-red-500">{error}</div>
+            <div className="text-red-400">{error}</div>
           </div>
         )}
 
         {!loading && !error && currentStepData && (
           <>
             {/* Left: ARC Frame */}
-            <div className="w-1/2 flex items-center justify-center p-6 bg-gray-100">
+            <div className="w-1/2 flex items-center justify-center p-6 bg-gray-800">
               <div className="flex flex-col items-center gap-4">
-                <h3 className="text-lg font-semibold text-gray-800">Game Frame</h3>
+                <h3 className="text-lg font-semibold text-gray-200">Game Frame</h3>
                 <ARCGrid
                   grid={currentStepData.frame_data?.grid || currentStepData.frame}
                   clickCoords={currentStepData.action_visualization?.click_coords || currentStepData.outcome.coords}
@@ -274,16 +274,16 @@ export default function TraceViewer() {
                   width={480}
                   height={480}
                 />
-                <div className="text-xs text-gray-500 font-mono">
+                <div className="text-xs text-gray-400 font-mono">
                   64×64 Grid | Step {currentStepData.step}
                   {currentStepData.action_visualization?.button_pressed && (
-                    <span className="ml-2 text-purple-600">
+                    <span className="ml-2 text-purple-400">
                       | Button: {currentStepData.action_visualization.button_pressed.toUpperCase()}
                     </span>
                   )}
                 </div>
                 {currentStepData.frame_data?.objects && currentStepData.frame_data.objects.length > 0 && (
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gray-300">
                     {currentStepData.frame_data.objects.length} objects detected
                   </div>
                 )}
@@ -291,10 +291,10 @@ export default function TraceViewer() {
             </div>
 
             {/* Right: ReCoN Network */}
-            <div className="w-1/2 flex flex-col bg-white">
-              <div className="p-4 border-b border-gray-200 bg-gray-50">
-                <h3 className="text-lg font-semibold text-gray-800">ReCoN Network State</h3>
-                <p className="text-sm text-gray-600 mt-1">
+            <div className="w-1/2 flex flex-col bg-gray-900">
+              <div className="p-4 border-b border-gray-700 bg-gray-800">
+                <h3 className="text-lg font-semibold text-gray-200">ReCoN Network State</h3>
+                <p className="text-sm text-gray-300 mt-1">
                   Action {currentStepData.step} | Propagation step {currentPropagationStep + 1} / {executionHistory.length}
                 </p>
               </div>
@@ -308,7 +308,7 @@ export default function TraceViewer() {
                     networkOverride={transformedNetwork}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="flex items-center justify-center h-full text-gray-400">
                     No network data available
                   </div>
                 )}
@@ -320,14 +320,14 @@ export default function TraceViewer() {
 
       {/* Bottom: Step Controls */}
       {traceData && (
-        <div className="bg-white border-t border-gray-200 p-4 shadow-sm space-y-3">
+        <div className="bg-gray-900 border-t border-gray-700 p-4 shadow-sm space-y-3">
           {/* Action Step Controls */}
           <div className="flex items-center justify-center gap-4">
-            <span className="text-xs font-semibold text-gray-600 uppercase w-32 text-right">Action Step:</span>
+            <span className="text-xs font-semibold text-gray-300 uppercase w-32 text-right">Action Step:</span>
             <button
               onClick={handlePrevStep}
               disabled={currentStep === 0}
-              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600"
+              className="px-4 py-2 bg-red-600 text-white rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-red-700"
             >
               ← Previous
             </button>
@@ -341,7 +341,7 @@ export default function TraceViewer() {
                 onChange={(e) => setCurrentStep(parseInt(e.target.value))}
                 className="w-64"
               />
-              <span className="text-sm font-medium text-gray-700 min-w-[100px]">
+              <span className="text-sm font-medium text-gray-200 min-w-[100px]">
                 {currentStep + 1} / {traceData.total_steps}
               </span>
             </div>
@@ -349,7 +349,7 @@ export default function TraceViewer() {
             <button
               onClick={handleNextStep}
               disabled={currentStep >= (traceData.total_steps - 1)}
-              className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600"
+              className="px-4 py-2 bg-red-600 text-white rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-red-700"
             >
               Next →
             </button>
@@ -358,11 +358,11 @@ export default function TraceViewer() {
           {/* Propagation Step Controls */}
           {executionHistory.length > 0 && (
             <div className="flex items-center justify-center gap-4">
-              <span className="text-xs font-semibold text-gray-600 uppercase w-32 text-right">Propagation:</span>
+              <span className="text-xs font-semibold text-gray-300 uppercase w-32 text-right">Propagation:</span>
               <button
                 onClick={handlePrevPropagation}
                 disabled={currentPropagationStep === 0}
-                className="px-4 py-2 bg-purple-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-purple-600"
+                className="px-4 py-2 bg-red-600 text-white rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-red-700"
               >
                 ↑ Previous
               </button>
@@ -376,7 +376,7 @@ export default function TraceViewer() {
                   onChange={(e) => setCurrentPropagationStep(parseInt(e.target.value))}
                   className="w-64"
                 />
-                <span className="text-sm font-medium text-gray-700 min-w-[100px]">
+                <span className="text-sm font-medium text-gray-200 min-w-[100px]">
                   {currentPropagationStep + 1} / {executionHistory.length}
                 </span>
               </div>
@@ -384,14 +384,14 @@ export default function TraceViewer() {
               <button
                 onClick={handleNextPropagation}
                 disabled={currentPropagationStep >= maxPropagationStep}
-                className="px-4 py-2 bg-purple-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-purple-600"
+                className="px-4 py-2 bg-red-600 text-white rounded disabled:bg-gray-600 disabled:cursor-not-allowed hover:bg-red-700"
               >
                 Next ↓
               </button>
             </div>
           )}
 
-          <div className="text-center text-xs text-gray-500">
+          <div className="text-center text-xs text-gray-400">
             Use arrow keys • Left/Right: Action steps • Up/Down: Propagation steps
           </div>
         </div>

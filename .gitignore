@@ -19,3 +19,4 @@ ARC-AGI-3-Agents/recordings/*
 !ARC-AGI-3-Agents/uv.lock
 
 recon_log*
+api.log

@@ -14,3 +14,14 @@ INFO:     100.64.0.34:52264 - "GET /parsed-networks HTTP/1.1" 200 OK
 INFO:     100.64.0.34:52264 - "GET /parsed-networks/recon_arc_angel_vc33 HTTP/1.1" 200 OK
 INFO:     100.64.0.34:52278 - "GET /parsed-networks HTTP/1.1" 200 OK
 INFO:     100.64.0.34:52264 - "GET /parsed-networks/recon_arc_angel_vc33/execution-history HTTP/1.1" 200 OK
+INFO:     100.64.0.37:41324 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.26:48564 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.26:33626 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.26:33626 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.34:34446 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.26:52182 - "GET /parsed-networks HTTP/1.1" 200 OK
+INFO:     100.64.0.26:52182 - "GET /parsed-networks HTTP/1.1" 200 OK
+INFO:     100.64.0.26:52182 - "GET /parsed-networks/recon_arc_angel_vc33 HTTP/1.1" 200 OK
+INFO:     100.64.0.26:52182 - "GET /parsed-networks/recon_arc_angel_vc33/execution-history HTTP/1.1" 200 OK
+INFO:     100.64.0.35:42676 - "GET /networks/demo HTTP/1.1" 200 OK
+INFO:     100.64.0.35:42676 - "GET /networks/demo HTTP/1.1" 200 OK

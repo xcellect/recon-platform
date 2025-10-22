@@ -501,19 +501,95 @@ async def get_parsed_network(network_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to load network: {str(e)}")
 
 
-@app.get("/parsed-networks/{network_id}/execution-history")
-async def get_parsed_network_execution_history(network_id: str):
-    """Get execution history for a parsed network (placeholder)."""
-    # For now, return empty history since these are static files
-    # In the future, this could load actual execution logs
+def parse_execution_history(log_data: dict, network_id: str):
+    """Parse execution history from different log formats."""
+    # ARCON format: "history": { "steps": [...] }
+    if "history" in log_data:
+        history = log_data["history"]
+        steps = history.get("steps", [])
+        return {
+            "network_id": network_id,
+            "root_node": "score_increase_hypothesis",  # ARCON uses this root
+            "result": history.get("result", "unknown"),
+            "steps": steps,
+            "final_state": steps[-1]["states"] if steps else {},
+            "total_steps": len(steps)
+        }
+    
+    # ReCoN ARC Angel format: "recon_steps": [...]
+    elif "recon_steps" in log_data:
+        recon_steps = log_data["recon_steps"]
+        
+        # Convert ReCoN format to unified format
+        unified_steps = []
+        for i, recon_step in enumerate(recon_steps):
+            # Extract node states from the detailed node structure
+            states = {}
+            nodes = recon_step.get("nodes", {})
+            for node_id, node_data in nodes.items():
+                states[node_id] = node_data.get("state", "inactive")
+            
+            # Create unified step format
+            unified_step = {
+                "step": i,
+                "states": states,
+                "messages": []  # ReCoN ARC Angel format doesn't have messages in same structure
+            }
+            unified_steps.append(unified_step)
+        
+        return {
+            "network_id": network_id,
+            "root_node": "frame_change_hypothesis",  # ReCoN ARC Angel uses this root
+            "result": "unknown",  # Would need to determine from final states
+            "steps": unified_steps,
+            "final_state": unified_steps[-1]["states"] if unified_steps else {},
+            "total_steps": len(unified_steps)
+        }
+    
+    # Fallback for unknown format
     return {
         "network_id": network_id,
         "root_node": "unknown",
-        "result": "unknown",
+        "result": "unknown", 
         "steps": [],
         "final_state": {},
         "total_steps": 0
     }
+
+
+@app.get("/parsed-networks/{network_id}/execution-history")
+async def get_parsed_network_execution_history(network_id: str):
+    """Get execution history for a parsed network from actual logs."""
+    try:
+        # Map network IDs to their log directories
+        log_mapping = {
+            "arcon_as66": "arcon_20250917T192437Z/game_as66-821a4dcad9c2/level_0",
+            "recon_arc_angel_vc33": "recon_arc_angel_20250917T193110Z/game_vc33-6ae7bf49eea5/level_0"
+        }
+        
+        if network_id not in log_mapping:
+            # Return empty history for unknown networks
+            return parse_execution_history({}, network_id)
+        
+        log_dir = Path("recon_log") / log_mapping[network_id]
+        
+        if not log_dir.exists():
+            raise HTTPException(status_code=404, detail=f"Log directory not found for {network_id}")
+        
+        # Find the first execution log file (they contain full execution history)
+        json_files = sorted(list(log_dir.glob("*.json")))
+        if not json_files:
+            raise HTTPException(status_code=404, detail=f"No execution logs found for {network_id}")
+        
+        # Load the first log file (contains complete execution)
+        log_file = json_files[0]
+        with open(log_file, 'r') as f:
+            log_data = json.load(f)
+        
+        return parse_execution_history(log_data, network_id)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load execution history: {str(e)}")
 
 
 if __name__ == "__main__":

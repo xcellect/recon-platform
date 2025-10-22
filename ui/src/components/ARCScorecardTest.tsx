@@ -309,9 +309,9 @@ const ARCScorecardTest: React.FC = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="text-xs text-gray-400">
-                    Ready to execute - Select root and click "Request Root"
-                  </div>
+                  // <div className="text-xs text-gray-400">
+                  //   Ready to execute - Select root and click "Request Root"
+                  // </div>
                 )}
               </div>
             </div>

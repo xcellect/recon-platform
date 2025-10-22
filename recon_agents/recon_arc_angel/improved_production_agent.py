@@ -27,10 +27,12 @@ try:
     # Try module-qualified imports first (for harness)
     from recon_agents.recon_arc_angel.improved_hierarchy_manager import ImprovedHierarchicalHypothesisManager
     from recon_agents.recon_arc_angel.learning_manager import LearningManager
+    from recon_agents.recon_arc_angel.link_weight_learner import LinkWeightLearner  # EXTENSION 1B
 except ImportError:
     # Fallback to local imports (for development/testing)
     from improved_hierarchy_manager import ImprovedHierarchicalHypothesisManager
     from learning_manager import LearningManager
+    from link_weight_learner import LinkWeightLearner  # EXTENSION 1B
 
 
 class ImprovedProductionReCoNArcAngel:
@@ -46,25 +48,38 @@ class ImprovedProductionReCoNArcAngel:
     - GPU acceleration and dual training
     """
     
-    def __init__(self, game_id: str = "default", cnn_threshold: float = 0.1, max_objects: int = 50):
+    def __init__(self, game_id: str = "default", cnn_threshold: float = 0.1, max_objects: int = 50,
+                 use_compact: bool = False, timing_mode: str = "discrete",
+                 enable_link_learning: bool = False, enable_global_workspace: bool = False):
         """
         Initialize the improved production ReCoN ARC Angel agent.
-        
+
         Args:
             game_id: Identifier for the game instance
             cnn_threshold: User-definable threshold for CNN confidence usage
             max_objects: Maximum objects to track per frame (BlindSquirrel limit)
+            use_compact: EXTENSION 1A - Use compact ReCoN with gen loops
+            timing_mode: EXTENSION 1C - Timing mode: "discrete", "activation", "hybrid"
+            enable_link_learning: EXTENSION 1B - Learn link weights from outcomes
+            enable_global_workspace: EXTENSION 3B - Enable Global Workspace Theory broadcasting
         """
         self.game_id = game_id
         self.cnn_threshold = cnn_threshold
         self.max_objects = max_objects
-        
+        self.enable_link_learning = enable_link_learning
+
         # 🚀 Core components - improved hierarchy with all enhancements
         self.hypothesis_manager = ImprovedHierarchicalHypothesisManager(
             cnn_threshold=cnn_threshold,
-            max_objects=max_objects
+            max_objects=max_objects,
+            use_compact=use_compact,              # EXTENSION 1A
+            timing_mode=timing_mode,              # EXTENSION 1C
+            enable_global_workspace=enable_global_workspace  # EXTENSION 3B
         )
         self.hypothesis_manager.build_improved_structure()
+
+        # EXTENSION 1B: Link weight learner
+        self.link_learner = LinkWeightLearner(learning_rate=0.1, blend_ratio=0.3) if enable_link_learning else None
         
         self.learning_manager = LearningManager(
             buffer_size=200000,
@@ -97,12 +112,15 @@ class ImprovedProductionReCoNArcAngel:
             'successful_clicks': 0,
             'frame_changes_detected': 0,
             'sticky_selections': 0,
-            'action6_coord_none_prevented': 0
+            'action6_coord_none_prevented': 0,
+            # EXTENSION 1B metrics
+            'link_learning_updates': 0,
+            'learned_links_count': 0
         }
 
         # ReCoN execution trace logging
         # Base directory for per-game/level step-by-step ReCoN traces
-        self._recon_log_base_dir = "/workspace/recon-platform/recon_log"
+        self._recon_log_base_dir = "/workspace/repo-update/recon-platform/recon_log"
         try:
             os.makedirs(self._recon_log_base_dir, exist_ok=True)
         except Exception:
@@ -165,7 +183,8 @@ class ImprovedProductionReCoNArcAngel:
                            step_snapshots: List[dict],
                            selected_action: Optional[str],
                            selected_coords: Optional[Tuple[int, int]],
-                           selected_obj_idx: Optional[int]) -> None:
+                           selected_obj_idx: Optional[int],
+                           frame_tensor: Optional[torch.Tensor] = None) -> None:
         """Persist a JSON trace of ReCoN execution for this decision step."""
         try:
             level_dir = self._ensure_recon_log_dir(score)
@@ -173,6 +192,35 @@ class ImprovedProductionReCoNArcAngel:
             action_ix = int(self.stats.get('total_actions', 0))
             fname = f"recon_trace_step_{action_ix:05d}_{timestamp}.json"
             fpath = os.path.join(level_dir, fname)
+
+            # Extract frame grid from tensor (64x64 with color indices)
+            frame_grid = None
+            if frame_tensor is not None:
+                try:
+                    # frame_tensor shape: (16, 64, 64) - one-hot encoded
+                    # Convert to color indices: argmax over channel dimension
+                    frame_grid = frame_tensor.argmax(dim=0).cpu().numpy().tolist()
+                except Exception as e:
+                    if os.getenv('RECON_DEBUG') == '1':
+                        print(f"Failed to extract frame grid: {e}")
+                    frame_grid = None
+
+            # Extract object segmentation data
+            objects_data = []
+            if hasattr(self.hypothesis_manager, 'current_objects'):
+                for i, obj in enumerate(self.hypothesis_manager.current_objects):
+                    try:
+                        # Note: keys are x_centroid, y_centroid (not centroid_x, centroid_y)
+                        obj_info = {
+                            "index": i,
+                            "centroid": [float(obj.get('x_centroid', 0)), float(obj.get('y_centroid', 0))],
+                            "area": int(obj.get('area', 0)),
+                            "regularity": float(obj.get('regularity', 0)),
+                            "color": int(obj.get('color', 0))
+                        }
+                        objects_data.append(obj_info)
+                    except Exception:
+                        pass
 
             payload = {
                 "meta": {
@@ -183,6 +231,16 @@ class ImprovedProductionReCoNArcAngel:
                     "max_objects": int(self.max_objects),
                     "available_actions": list(available_names) if available_names else None,
                     "timestamp_utc": timestamp
+                },
+                "frame_data": {
+                    "grid": frame_grid,  # 64x64 grid with color indices (0-15)
+                    "objects": objects_data  # Detected objects with centroids
+                },
+                "action_visualization": {
+                    "action_type": selected_action,  # "action_click" or "action_1" etc.
+                    "click_coords": [int(selected_coords[0]), int(selected_coords[1])] if selected_coords else None,  # [x, y] for crosshair
+                    "object_index": int(selected_obj_idx) if selected_obj_idx is not None else None,  # Which object was clicked (if any)
+                    "button_pressed": selected_action if selected_action and selected_action != "action_click" else None
                 },
                 "recon_steps": step_snapshots,
                 "outcome": {
@@ -196,7 +254,7 @@ class ImprovedProductionReCoNArcAngel:
                 json.dump(payload, f, indent=2, default=str)
         except Exception:
             # Silent failure to avoid impacting gameplay; debug printing optional
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_DEBUG') == '1':
                 print("Failed to write ReCoN trace log")
     
     def _convert_frame_to_tensor(self, frame_data: Any) -> torch.Tensor:
@@ -222,34 +280,37 @@ class ImprovedProductionReCoNArcAngel:
     
     def _log_coordinate_heatmap(self, frame_tensor: torch.Tensor):
         """Log coordinate probability heatmap for debugging CNN exploration."""
+        if os.getenv('RECON_VERBOSE') != '1':
+            return
+
         try:
             # Get CNN coordinate probabilities
             measurement = self.hypothesis_manager.cnn_terminal.measure(frame_tensor)
             result = self.hypothesis_manager.cnn_terminal._process_measurement(measurement)
             coord_probs = result["coordinate_probabilities"]
-            
+
             # Find argmax coordinate
             flat_probs = coord_probs.flatten()
             argmax_idx = torch.argmax(flat_probs).item()
             argmax_y = argmax_idx // 64
             argmax_x = argmax_idx % 64
             max_prob = flat_probs[argmax_idx].item()
-            
+
             # Calculate entropy for exploration measure
             entropy = -(coord_probs * torch.log(coord_probs + 1e-8)).sum().item()
-            
+
             print(f"  📊 Coordinate Heatmap Analysis:")
             print(f"    Argmax: ({argmax_x}, {argmax_y}) with prob={max_prob:.4f}")
             print(f"    Entropy: {entropy:.3f} (higher = more exploration)")
             print(f"    Temperature: {getattr(self.hypothesis_manager.cnn_terminal, 'coord_temp', 'N/A')}")
-            
+
             # Log top-5 coordinates for diversity check
             top_5_indices = torch.topk(flat_probs, 5).indices
             top_5_coords = [(idx.item() // 64, idx.item() % 64) for idx in top_5_indices]
             top_5_probs = [flat_probs[idx].item() for idx in top_5_indices]
-            
+
             print(f"    Top-5 coords: {list(zip(top_5_coords, [f'{p:.4f}' for p in top_5_probs]))}")
-            
+
         except Exception as e:
             print(f"  ❌ Error in coordinate heatmap logging: {e}")
     
@@ -354,7 +415,8 @@ class ImprovedProductionReCoNArcAngel:
         try:
             current_frame_tensor = self._convert_frame_to_tensor(latest_frame)
         except Exception as e:
-            print(f"Improved ReCoN ARC Angel: Error converting frame: {e}")
+            if os.getenv('RECON_VERBOSE') == '1':
+                print(f"Improved ReCoN ARC Angel: Error converting frame: {e}")
             return self._convert_to_game_action("action_1")
         
         # Object-scoped stickiness management (replaced global frame change detection)
@@ -404,7 +466,7 @@ class ImprovedProductionReCoNArcAngel:
                 valid_for_training = True
                 if self.prev_action_type == "action_click" and self.prev_coords is None:
                     valid_for_training = False
-                    if os.getenv('RECON_DEBUG'):
+                    if os.getenv('RECON_DEBUG') == '1':
                         print(f"  ⚠️  Skipping training for action_click with coords=None")
                 
                 if valid_for_training:
@@ -427,9 +489,10 @@ class ImprovedProductionReCoNArcAngel:
                         self.game_id,
                         latest_frame.score if hasattr(latest_frame, 'score') else 0
                     )
-                
+
             except Exception as e:
-                print(f"Improved ReCoN ARC Angel: Error in dual training: {e}")
+                if os.getenv('RECON_VERBOSE') == '1':
+                    print(f"Improved ReCoN ARC Angel: Error in dual training: {e}")
         
         # 🔍 Improved object segmentation + mask-aware CNN inference
         try:
@@ -438,9 +501,10 @@ class ImprovedProductionReCoNArcAngel:
             # Track objects detected
             stats = self.hypothesis_manager.get_stats()
             self.stats['objects_detected'] = stats.get('current_objects', 0)
-            
+
         except Exception as e:
-            print(f"Improved ReCoN ARC Angel: Error updating weights: {e}")
+            if os.getenv('RECON_VERBOSE') == '1':
+                print(f"Improved ReCoN ARC Angel: Error updating weights: {e}")
         
         # 🎯 Improved ReCoN execution with proper sequences
         self.hypothesis_manager.reset()
@@ -538,7 +602,7 @@ class ImprovedProductionReCoNArcAngel:
                 best_action = "action_1"
         
         # Debug log for verification
-        if os.getenv('RECON_DEBUG'):
+        if os.getenv('RECON_DEBUG') == '1':
             print(f"🎯 Improved Production Agent Action Selection:")
             print(f"  Available names: {available_names if 'available_names' in locals() else 'N/A'}")
             print(f"  Selected action: {best_action}")
@@ -561,13 +625,14 @@ class ImprovedProductionReCoNArcAngel:
             current_score = latest_frame.score if hasattr(latest_frame, 'score') else None
         except Exception:
             current_score = None
-        self._write_recon_trace(current_score, available_names, step_snapshots, best_action, best_coords, best_obj_idx)
+        self._write_recon_trace(current_score, available_names, step_snapshots, best_action, best_coords, best_obj_idx, current_frame_tensor)
 
         # Convert to game action
         try:
             game_action = self._convert_to_game_action(best_action, best_coords)
         except Exception as e:
-            print(f"Improved ReCoN ARC Angel: Error converting action: {e}")
+            if os.getenv('RECON_VERBOSE') == '1':
+                print(f"Improved ReCoN ARC Angel: Error converting action: {e}")
             game_action = self._convert_to_game_action("action_1")
         
         # Store state for next iteration
@@ -588,7 +653,8 @@ class ImprovedProductionReCoNArcAngel:
                 if metrics:
                     self.stats['cnn_training_steps'] += 1
             except Exception as e:
-                print(f"Improved ReCoN ARC Angel: Error in CNN training: {e}")
+                if os.getenv('RECON_VERBOSE') == '1':
+                    print(f"Improved ReCoN ARC Angel: Error in CNN training: {e}")
         
         return game_action
     

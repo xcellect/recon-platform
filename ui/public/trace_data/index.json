@@ -1,0 +1,45 @@
+{
+  "games": [
+    {
+      "game_id": "ft09-b8377d4b7815",
+      "levels": [
+        "0"
+      ]
+    },
+    {
+      "game_id": "as66-821a4dcad9c2",
+      "levels": [
+        "1",
+        "0"
+      ]
+    },
+    {
+      "game_id": "ls20-fa137e247ce6",
+      "levels": [
+        "0"
+      ]
+    },
+    {
+      "game_id": "sp80-0605ab9e5b2a",
+      "levels": [
+        "1",
+        "0"
+      ]
+    },
+    {
+      "game_id": "vc33-6ae7bf49eea5",
+      "levels": [
+        "3",
+        "2",
+        "1",
+        "0"
+      ]
+    },
+    {
+      "game_id": "lp85-d265526edbaa",
+      "levels": [
+        "0"
+      ]
+    }
+  ]
+}

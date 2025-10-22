@@ -44,18 +44,52 @@ class ImprovedHierarchicalHypothesisManager:
     - Stickiness mechanism for frame change persistence
     """
     
-    def __init__(self, cnn_threshold: float = 0.1, max_objects: int = 50):
+    def __init__(self, cnn_threshold: float = 0.1, max_objects: int = 50,
+                 use_compact: bool = False, timing_mode: str = "discrete",
+                 enable_global_workspace: bool = False):
         """
         Initialize improved hierarchy manager.
-        
+
         Args:
             cnn_threshold: User-definable threshold for CNN confidence usage
             max_objects: Maximum objects to track per frame (efficiency limit)
+            use_compact: EXTENSION 1A - Use compact ReCoN with gen loops
+            timing_mode: EXTENSION 1C - Timing mode: "discrete", "activation", or "hybrid"
+            enable_global_workspace: EXTENSION 3B - Enable Global Workspace Theory broadcasting
         """
-        self.graph = ReCoNGraph()
+        # EXTENSION 1A: Choose implementation
+        if use_compact:
+            try:
+                from recon_platform.recon_engine.compact import CompactReCoNGraph
+                self.graph = CompactReCoNGraph()
+                self.use_compact = True
+            except ImportError:
+                from recon_engine.compact import CompactReCoNGraph
+                self.graph = CompactReCoNGraph()
+                self.use_compact = True
+        else:
+            self.graph = ReCoNGraph()
+            self.use_compact = False
+
         self.cnn_threshold = cnn_threshold
         self.max_objects = max_objects
-        
+        self.timing_mode = timing_mode  # EXTENSION 1C
+
+        # EXTENSION 3B: Global Workspace Theory
+        self.enable_global_workspace = enable_global_workspace
+        self.global_workspace = None
+        if enable_global_workspace:
+            try:
+                from recon_agents.recon_arc_angel.global_workspace import GlobalWorkspace
+                self.global_workspace = GlobalWorkspace(
+                    broadcast_strength=0.3,  # 30% suppression
+                    winner_boost=0.2         # 20% winner boost
+                )
+            except ImportError:
+                # Fallback if import fails
+                self.enable_global_workspace = False
+                print("Warning: Could not import GlobalWorkspace, disabling GWT")
+
         # Neural components
         self.cnn_terminal = None
         self.resnet_terminal = None
@@ -89,13 +123,72 @@ class ImprovedHierarchicalHypothesisManager:
         """Build the improved ReCoN hierarchy structure with proper por/ret sequences"""
         if self._built:
             raise ValueError("Structure already built")
-        
+
         self._build_root_and_basic_actions()
         self._build_action6_sequence()
         self._add_neural_terminals()
-        
+
+        # EXTENSION 1C: Configure timing modes
+        self._configure_timing_modes()
+
         self._built = True
         return self
+
+    # EXTENSION 1C: Timing Mode Configuration
+    def _configure_timing_modes(self):
+        """Configure timing behavior based on mode"""
+        if self.timing_mode == "discrete":
+            # Fast for simple actions, slower for complex
+            for i in range(1, 6):
+                node = self.graph.get_node(f"action_{i}")
+                node.configure_timing(mode="discrete", discrete_wait_steps=2)
+
+            action_click = self.graph.get_node("action_click")
+            action_click.configure_timing(mode="discrete", discrete_wait_steps=6)
+
+        elif self.timing_mode == "activation":
+            # Activation-based for all (MicroPsi2 style)
+            for node_id in self.graph.nodes:
+                node = self.graph.get_node(node_id)
+                if node.type == "script":
+                    node.configure_timing(
+                        mode="activation",
+                        activation_decay_rate=0.8,
+                        activation_failure_threshold=0.1
+                    )
+
+        elif self.timing_mode == "hybrid":
+            # Discrete for simple, activation for complex
+            for i in range(1, 6):
+                node = self.graph.get_node(f"action_{i}")
+                node.configure_timing(mode="discrete", discrete_wait_steps=2)
+
+            action_click = self.graph.get_node("action_click")
+            action_click.configure_timing(
+                mode="activation",
+                activation_decay_rate=0.9,
+                activation_failure_threshold=0.15
+            )
+
+    # EXTENSION 1A: Gen Loop Support
+    def add_gen_loops_to_objects(self):
+        """Add gen loops to object terminals for persistence (Section 3.2 style)"""
+        if not self.use_compact:
+            return  # Only for compact implementation
+
+        for obj_idx in range(len(self.current_objects)):
+            obj_id = f"object_{obj_idx}"
+            if obj_id in self.graph.nodes:
+                # Add gen loop with 0.95 persistence (Section 3.2)
+                try:
+                    self.graph.add_link(obj_id, obj_id, "gen", weight=0.95)
+                except:
+                    pass  # May already exist
+
+                # Initialize gen activation from object confidence
+                obj_node = self.graph.get_node(obj_id)
+                obj = self.current_objects[obj_idx]
+                obj_node.gates["gen"] = obj.get("confidence", 0.5)
     
     def _build_root_and_basic_actions(self):
         """Build root and basic action scripts (ACTION1-ACTION5)"""
@@ -689,10 +782,17 @@ class ImprovedHierarchicalHypothesisManager:
             # Sample from distribution
             import random
             selected_idx = torch.multinomial(probs, 1).item()
+
+            # EXTENSION 3B: Global Workspace broadcast (suppress competitors)
+            if self.enable_global_workspace and self.global_workspace is not None:
+                self.global_workspace.broadcast_winner(
+                    selected_idx, action_candidates, self.graph
+                )
+
             best_action, best_score, best_coords, best_obj_idx = action_candidates[selected_idx]
         
         # Debug logging
-        if os.getenv('RECON_DEBUG'):
+        if os.getenv('RECON_VERBOSE') == '1':
             print(f"🔍 Improved ReCoN Network State:")
             print(f"  Objects detected: {len(self.current_objects)}")
             print(f"  Available actions: {available_actions}")
@@ -879,7 +979,7 @@ class ImprovedHierarchicalHypothesisManager:
             # Success if ratio >= tau_ratio OR absolute pixels >= tau_pixels
             success = (change_ratio >= self.tau_ratio) or (changed_pixels >= self.tau_pixels)
             
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  🔍 Object-scoped change detection:")
                 print(f"    Changed pixels: {changed_pixels}")
                 print(f"    Change ratio: {change_ratio:.3f}")
@@ -889,7 +989,7 @@ class ImprovedHierarchicalHypothesisManager:
             return success
             
         except Exception as e:
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  ❌ Error in object-scoped change detection: {e}")
             return False
     
@@ -913,7 +1013,7 @@ class ImprovedHierarchicalHypothesisManager:
         self.stickiness_strength = 1.0
         self.sticky_attempts = 0
         
-        if os.getenv('RECON_DEBUG'):
+        if os.getenv('RECON_VERBOSE') == '1':
             print(f"  🎯 Recorded successful click: coord={coord}, obj_idx={obj_idx}, mask_size={obj_mask.sum()}")
     
     def update_stickiness(self, current_frame_tensor: torch.Tensor, 
@@ -931,7 +1031,7 @@ class ImprovedHierarchicalHypothesisManager:
         
         # Clear stickiness if ACTION6 unavailable or object vanished
         if not action6_available or masked_max_cnn_prob < self.p_min:
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  🚫 Clearing stickiness: ACTION6_available={action6_available}, CNN_prob={masked_max_cnn_prob:.3f}")
             self.clear_stickiness()
             return
@@ -942,17 +1042,17 @@ class ImprovedHierarchicalHypothesisManager:
         if change_detected:
             # Reset attempts on successful change
             self.sticky_attempts = 0
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  ✅ Object change detected, maintaining stickiness")
         else:
             # Increment stale attempts
             self.sticky_attempts += 1
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  ⏳ No change detected, sticky_attempts={self.sticky_attempts}/{self.max_sticky_attempts}")
             
             # Clear after max stale attempts
             if self.sticky_attempts >= self.max_sticky_attempts:
-                if os.getenv('RECON_DEBUG'):
+                if os.getenv('RECON_VERBOSE') == '1':
                     print(f"  🚫 Clearing stickiness after {self.max_sticky_attempts} stale attempts")
                 self.clear_stickiness()
                 return
@@ -975,7 +1075,7 @@ class ImprovedHierarchicalHypothesisManager:
         """Clear CNN cache to enable fresh inference after stale clicks."""
         if hasattr(self.cnn_terminal, 'clear_cache'):
             self.cnn_terminal.clear_cache()
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  🔄 Cleared CNN cache to enable fresh inference")
         
         # Clear stale tries for disappeared objects
@@ -989,14 +1089,14 @@ class ImprovedHierarchicalHypothesisManager:
             self.stale_tries[obj_idx] = 0
         self.stale_tries[obj_idx] += 1
         
-        if os.getenv('RECON_DEBUG'):
+        if os.getenv('RECON_VERBOSE') == '1':
             print(f"  📈 Recorded stale click for object_{obj_idx}: {self.stale_tries[obj_idx]} tries")
     
     def record_successful_object_click(self, obj_idx: int):
         """Record a successful click (change detected) for an object."""
         if obj_idx in self.stale_tries:
             self.stale_tries[obj_idx] = 0
-            if os.getenv('RECON_DEBUG'):
+            if os.getenv('RECON_VERBOSE') == '1':
                 print(f"  ✅ Reset stale tries for object_{obj_idx} (successful change)")
     
     def get_stale_penalty(self, obj_idx: int) -> float:
@@ -1010,7 +1110,7 @@ class ImprovedHierarchicalHypothesisManager:
         if self.stale_tries.get(obj_idx, 0) > 0:
             if hasattr(self.cnn_terminal, 'clear_cache'):
                 self.cnn_terminal.clear_cache()
-                if os.getenv('RECON_DEBUG'):
+                if os.getenv('RECON_VERBOSE') == '1':
                     print(f"  🔄 Cleared CNN cache due to stale clicks on object_{obj_idx}")
     
     def _save_debug_visualization(self, frame_tensor: torch.Tensor, coords: Tuple[int, int], action_count: int):
@@ -1155,8 +1255,8 @@ class ImprovedHierarchicalHypothesisManager:
         """Get statistics about the improved hierarchy"""
         if not self._built:
             return {"built": False}
-        
-        return {
+
+        stats = {
             "built": True,
             "total_nodes": len(self.graph.nodes),
             "total_links": len(self.graph.links),
@@ -1175,3 +1275,11 @@ class ImprovedHierarchicalHypothesisManager:
             "stale_penalty_lambda": self.stale_penalty_lambda,
             "improvement": "Mask-aware CNN, background suppression, stickiness, proper ReCoN sequences"
         }
+
+        # EXTENSION 3B: Add Global Workspace stats
+        if self.enable_global_workspace and self.global_workspace is not None:
+            stats["global_workspace"] = self.global_workspace.get_stats()
+        else:
+            stats["global_workspace"] = {"enabled": False}
+
+        return stats

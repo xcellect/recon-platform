@@ -191,15 +191,32 @@ class CompactReCoNGraph(ReCoNGraph):
     making link existence explicit.
     """
     
-    def add_node(self, node_id: str, node_type: str = "script") -> CompactReCoNNode:
-        """Add a compact ReCoN node."""
-        if node_id in self.nodes:
-            raise ValueError(f"Node {node_id} already exists")
-            
-        node = CompactReCoNNode(node_id, node_type)
+    def add_node(self, node: Union[str, ReCoNNode], node_type: str = "script") -> Union[CompactReCoNNode, ReCoNNode]:
+        """
+        Add a node to the compact ReCoN graph.
+
+        Accepts either a string ID (creates CompactReCoNNode) or an existing ReCoNNode object
+        (e.g., neural terminals). This allows neural terminals to coexist with compact nodes.
+
+        EXTENSION 1A: Neural terminals don't participate in compact f_node arithmetic - they're
+        sensing endpoints. Only script/object nodes use compact update rules and gen loops.
+        """
+        if isinstance(node, str):
+            # Create new CompactReCoNNode from ID
+            node_id = node
+            if node_id in self.nodes:
+                raise ValueError(f"Node {node_id} already exists")
+            node = CompactReCoNNode(node_id, node_type)
+        else:
+            # Use existing ReCoNNode object (e.g., neural terminals)
+            node_id = node.id
+            if node_id in self.nodes:
+                raise ValueError(f"Node {node_id} already exists")
+            # Keep the node as-is (don't convert to CompactReCoNNode)
+
         self.nodes[node_id] = node
         self.graph.add_node(node_id, node_obj=node)
-        
+
         return node
     
     def add_link(self, source: str, target: str, link_type: str, weight: Union[float, torch.Tensor] = 1.0):

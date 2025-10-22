@@ -1,0 +1,4 @@
+# file: /workspace/repo-update/recon-platform/recon_agents/recon_arc_angel/global_workspace.py
+# hypothesis_version: 6.140.2
+
+[0.0, 0.2, 0.3, 1.0, 'activation', 'avg_winner_boost', 'broadcast_strength', 'enabled', 'last_runnerup_score', 'last_winner_score', 'total_broadcasts', 'total_winner_boost', 'winner_boost']

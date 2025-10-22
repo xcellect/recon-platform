@@ -5,10 +5,11 @@ import Toolbar from './components/Toolbar';
 import NodePanel from './components/NodePanel';
 import ImportExport from './components/ImportExport';
 import ARCScorecardTest from './components/ARCScorecardTest';
+import TraceViewer from './components/TraceViewer';
 import { useNetworkStore } from './stores/networkStore';
 import logoIcon from '../assets/icon.svg';
 
-type TabType = 'recon' | 'scorecard';
+type TabType = 'recon' | 'scorecard' | 'traces';
 
 function App() {
   const { currentNetwork, loadNetwork } = useNetworkStore();
@@ -131,6 +132,8 @@ function App() {
         );
       case 'scorecard':
         return <ARCScorecardTest />;
+      case 'traces':
+        return <TraceViewer />;
       default:
         return null;
     }
@@ -162,6 +165,16 @@ function App() {
               }`}
             >
               ARCON
+            </button>
+            <button
+              onClick={() => setActiveTab('traces')}
+              className={`px-6 py-3 text-sm font-medium border-b-2 ${
+                activeTab === 'traces'
+                  ? 'border-red-500 text-red-400'
+                  : 'border-transparent text-gray-300 hover:text-white hover:border-gray-500'
+              }`}
+            >
+              TRACE VIEWER
             </button>
           </div>
           
